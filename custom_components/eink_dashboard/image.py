@@ -371,11 +371,14 @@ class EinkDashboardImage(ImageEntity):
 
         events: list[dict[str, Any]] = []
         for entity_id, payload in (result or {}).items():
+            # Right after a restart the friendly name can still be missing.
+            # Falling back to the raw entity id puts "calendar.hankie" on the
+            # screen, so derive something readable from the object id instead.
             label = (
                 states.get(entity_id, {})
                 .get("attributes", {})
-                .get("friendly_name", entity_id)
-            )
+                .get("friendly_name")
+            ) or entity_id.split(".", 1)[-1].replace("_", " ").title()
             for event in (payload or {}).get("events", []) or []:
                 start_raw = event.get("start")
                 if not start_raw:

@@ -180,6 +180,7 @@ export interface CalendarWidget extends WidgetBase {
   days?: number;
   max_events?: number;
   row_height?: number;
+  show_calendar?: boolean;
   day_names?: string[];
   month_names?: string[];
   today_label?: string;

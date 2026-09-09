@@ -69,7 +69,7 @@ export const WIDGET_TYPES: Record<string, WidgetTypeMeta> = {
   },
   calendar: {
     label: "Calendar",
-    defaults: { type: "calendar", x: 24, y: 0, w: 0, title: "", entities: [], font_size: FONT_SIZE_CALENDAR, days: 14, max_events: 8 },
+    defaults: { type: "calendar", x: 24, y: 0, w: 0, title: "", entities: [], font_size: FONT_SIZE_CALENDAR, days: 14, max_events: 8, show_calendar: false },
   },
 };
 
@@ -234,6 +234,7 @@ export const SCHEMAS: Record<string, (d: DisplayConfig) => HaFormSchema[]> = {
       ],
     },
     { name: "row_height", selector: { number: { min: 10, max: 80, mode: "box" } } },
+    { name: "show_calendar", selector: { boolean: {} } },
   ],
 
   chart: (d) => [
@@ -292,6 +293,7 @@ export const LABELS: Record<string, string> = {
   days: "Days ahead",
   max_events: "Maximum events",
   row_height: "Row height",
+  show_calendar: "Show calendar name",
   y_min: "Y-axis min",
   y_max: "Y-axis max",
 };

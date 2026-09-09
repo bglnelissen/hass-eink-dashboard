@@ -2257,9 +2257,67 @@ class TestRenderCalendar:
         )
         assert self._inkt(een) < self._inkt(alles)
 
+    def test_show_calendar_adds_the_name(self) -> None:
+        """With show_calendar on, the calendar name is drawn as well."""
+        events = [
+            {
+                "entity_id": "calendar.bas",
+                "calendar": "Bas",
+                "start": f"{dt.date.today()}T14:00:00",
+                "summary": "Avond",
+            }
+        ]
+        zonder = self._render(events=events)
+        met = self._render({"show_calendar": True}, events=events)
+        assert self._inkt(met) > self._inkt(zonder)
+
+    def test_name_is_skipped_when_the_summary_starts_with_it(self) -> None:
+        """Avoids "Guust Guust hockeytraining" for self-named events."""
+        events = [
+            {
+                "entity_id": "calendar.guust",
+                "calendar": "Guust",
+                "start": f"{dt.date.today()}T17:00:00",
+                "summary": "Guust hockeytraining",
+            }
+        ]
+        zonder = self._render(events=events)
+        met = self._render({"show_calendar": True}, events=events)
+        assert self._inkt(met) == self._inkt(zonder)
+
+    def test_name_match_ignores_case(self) -> None:
+        events = [
+            {
+                "entity_id": "calendar.pim",
+                "calendar": "Pim",
+                "start": f"{dt.date.today()}T16:30:00",
+                "summary": "PIM hockey training",
+            }
+        ]
+        zonder = self._render(events=events)
+        met = self._render({"show_calendar": True}, events=events)
+        assert self._inkt(met) == self._inkt(zonder)
+
     def test_unparsable_events_are_skipped_not_fatal(self) -> None:
         kapot = [{"entity_id": "calendar.c0", "start": "", "summary": "x"}]
         assert_all_white(self._render(events=kapot), 0, 0, 400, 480)
+
+    def test_no_day_heading_without_room_for_an_event(self) -> None:
+        """A heading at the very bottom with nothing under it looks broken."""
+        vandaag = dt.date.today()
+        events = [
+            {
+                "entity_id": "calendar.c0",
+                "calendar": "C0",
+                "start": f"{vandaag + dt.timedelta(days=i)}T09:00:00",
+                "summary": f"Event {i}",
+            }
+            for i in range(30)
+        ]
+        img = self._render({"max_events": 30, "row_height": 30}, events=events)
+        # De onderste 30 pixels moeten leeg zijn: daar paste geen hele dag meer.
+        onderkant = img.crop((0, img.height - 30, img.width, img.height))
+        assert sum(onderkant.histogram()[:128]) == 0
 
     def test_events_stop_at_the_bottom_edge(self) -> None:
         """A long list must not draw past the canvas."""

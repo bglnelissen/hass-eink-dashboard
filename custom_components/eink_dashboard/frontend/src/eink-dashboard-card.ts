@@ -1692,13 +1692,22 @@ class EinkDashboardCard extends HTMLElement {
         ctx.fillStyle = grayColor(COLOR_GRAY);
         ctx.fillText(time, x, y);
       }
+      let textX = x + timeW;
+      if (widget.show_calendar) {
+        const name = String(attrs.friendly_name ?? "");
+        if (name && !summary.toLowerCase().startsWith(name.toLowerCase())) {
+          ctx.fillStyle = grayColor(COLOR_GRAY);
+          ctx.fillText(name, textX, y);
+          textX += Math.round(ctx.measureText(`${name} `).width);
+        }
+      }
       ctx.fillStyle = grayColor(COLOR_BLACK);
       let text = summary;
-      const maxW = rightEdge - (x + timeW);
+      const maxW = rightEdge - textX;
       while (text.length > 1 && ctx.measureText(`${text}\u2026`).width > maxW) {
         text = text.slice(0, -1);
       }
-      ctx.fillText(text === summary ? text : `${text}\u2026`, x + timeW, y);
+      ctx.fillText(text === summary ? text : `${text}\u2026`, textX, y);
 
       y += rowH;
       drawn++;

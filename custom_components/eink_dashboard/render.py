@@ -1839,6 +1839,11 @@ def render_calendar(
     Events come from config["calendar_events"], already sorted by start and
     fetched through the calendar.get_events service. Set the entities field
     to show only some of the calendars that were fetched.
+
+    With show_calendar the calendar name is drawn before the summary, so a
+    shift called "Avond" reads as "Bas Avond". The name is skipped when the
+    summary already starts with it, which avoids "Guust Guust hockeytraining"
+    for events people name after themselves.
     """
     x = widget.get("x", PADDING)
     y = widget.get("y", 0)
@@ -1871,6 +1876,8 @@ def render_calendar(
     today_label = widget.get("today_label") or DEFAULT_TODAY_LABEL
     tomorrow_label = widget.get("tomorrow_label") or DEFAULT_TOMORROW_LABEL
 
+    show_calendar = widget.get("show_calendar", False)
+
     today = date.today()
     bottom = config.get("height", 0)
     huidige_dag: date | None = None
@@ -1887,7 +1894,10 @@ def render_calendar(
         if dag != huidige_dag:
             if huidige_dag is not None:
                 y += day_gap
-            if bottom and y + row_height > bottom:
+            # Only start a day when its heading and at least one event fit,
+            # otherwise the screen ends on a heading with nothing under it.
+            kop_hoogte = round(font_size * 0.95)
+            if bottom and y + kop_hoogte + row_height > bottom:
                 break
             draw.text(
                 (x, y),
@@ -1911,12 +1921,20 @@ def render_calendar(
         if tijdstip:
             draw.text((x, y), tijdstip, fill=COLOR_GRAY, font=font_row)
         tekst_x = x + time_width
+
+        samenvatting = str(event.get("summary") or "")
+        if show_calendar:
+            naam = str(event.get("calendar") or "")
+            if naam and not samenvatting.lower().startswith(naam.lower()):
+                draw.text((tekst_x, y), naam, fill=COLOR_GRAY, font=font_row)
+                tekst_x += round(draw.textlength(naam + " ", font=font_row))
+
         _draw_rich_text(
             draw,
             (tekst_x, y),
             _fit_text(
                 draw,
-                str(event.get("summary") or ""),
+                samenvatting,
                 font_row,
                 right_edge - tekst_x,
                 emoji_font,
