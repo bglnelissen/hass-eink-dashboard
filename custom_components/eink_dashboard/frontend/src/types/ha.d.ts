@@ -181,6 +181,10 @@ export interface CalendarWidget extends WidgetBase {
   max_events?: number;
   row_height?: number;
   show_calendar?: boolean;
+  calendar_position?: "inline" | "column" | "below_time";
+  calendar_font_size?: number;
+  calendar_max_chars?: number;
+  calendar_width?: number;
   day_names?: string[];
   month_names?: string[];
   today_label?: string;

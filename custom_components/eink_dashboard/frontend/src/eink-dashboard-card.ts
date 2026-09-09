@@ -1694,11 +1694,26 @@ class EinkDashboardCard extends HTMLElement {
       }
       let textX = x + timeW;
       if (widget.show_calendar) {
-        const name = String(attrs.friendly_name ?? "");
-        if (name && !summary.toLowerCase().startsWith(name.toLowerCase())) {
+        const pos = widget.calendar_position ?? "inline";
+        const nameSize = widget.calendar_font_size
+          ?? Math.round(fontSize * (pos === "below_time" ? 0.65 : 1));
+        const colW = Math.round(widget.calendar_width ?? fontSize * 3.4);
+        let name = String(attrs.friendly_name ?? "");
+        if (widget.calendar_max_chars) {
+          name = name.slice(0, widget.calendar_max_chars).trimEnd();
+        }
+        if (name) {
+          ctx.font = `${nameSize}px ${FONT_FAMILY}`;
           ctx.fillStyle = grayColor(COLOR_GRAY);
-          ctx.fillText(name, textX, y);
-          textX += Math.round(ctx.measureText(`${name} `).width);
+          if (pos === "below_time") {
+            ctx.fillText(name, x, y + Math.round(fontSize * 0.82));
+          } else if (pos === "column") {
+            ctx.fillText(name, textX, y);
+            textX += colW;
+          } else {
+            ctx.fillText(name, textX, y);
+            textX += Math.round(ctx.measureText(`${name} `).width);
+          }
         }
       }
       ctx.fillStyle = grayColor(COLOR_BLACK);

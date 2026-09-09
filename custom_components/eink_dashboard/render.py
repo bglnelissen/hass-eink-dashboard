@@ -1877,6 +1877,14 @@ def render_calendar(
     tomorrow_label = widget.get("tomorrow_label") or DEFAULT_TOMORROW_LABEL
 
     show_calendar = widget.get("show_calendar", False)
+    positie = widget.get("calendar_position", "inline")
+    naam_grootte = widget.get(
+        "calendar_font_size",
+        round(font_size * (0.65 if positie == "below_time" else 1.0)),
+    )
+    font_naam = _load_font(naam_grootte, font=widget.get("font", "roboto"))
+    naam_breedte = round(widget.get("calendar_width", font_size * 3.4))
+    naam_tekens = widget.get("calendar_max_chars")
 
     today = date.today()
     bottom = config.get("height", 0)
@@ -1923,11 +1931,30 @@ def render_calendar(
         tekst_x = x + time_width
 
         samenvatting = str(event.get("summary") or "")
-        if show_calendar:
-            naam = str(event.get("calendar") or "")
-            if naam and not samenvatting.lower().startswith(naam.lower()):
-                draw.text((tekst_x, y), naam, fill=COLOR_GRAY, font=font_row)
-                tekst_x += round(draw.textlength(naam + " ", font=font_row))
+        naam = str(event.get("calendar") or "") if show_calendar else ""
+        # Hard cut on character count keeps a name column the same width for
+        # every row, which reads calmer than cutting on pixel width.
+        if naam and naam_tekens:
+            naam = naam[:naam_tekens].rstrip()
+
+        if naam and positie == "below_time":
+            draw.text(
+                (x, y + round(font_size * 0.82)),
+                _fit_text(draw, naam, font_naam, time_width - 4),
+                fill=COLOR_GRAY,
+                font=font_naam,
+            )
+        elif naam and positie == "column":
+            draw.text(
+                (tekst_x, y),
+                _fit_text(draw, naam, font_naam, naam_breedte - 6),
+                fill=COLOR_GRAY,
+                font=font_naam,
+            )
+            tekst_x += naam_breedte
+        elif naam:
+            draw.text((tekst_x, y), naam, fill=COLOR_GRAY, font=font_naam)
+            tekst_x += round(draw.textlength(naam + " ", font=font_naam))
 
         _draw_rich_text(
             draw,

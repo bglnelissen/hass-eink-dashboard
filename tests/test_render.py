@@ -2271,8 +2271,8 @@ class TestRenderCalendar:
         met = self._render({"show_calendar": True}, events=events)
         assert self._inkt(met) > self._inkt(zonder)
 
-    def test_name_is_skipped_when_the_summary_starts_with_it(self) -> None:
-        """Avoids "Guust Guust hockeytraining" for self-named events."""
+    def test_name_is_shown_even_when_the_summary_repeats_it(self) -> None:
+        """Bas wants the name on every row, also on "Guust hockeytraining"."""
         events = [
             {
                 "entity_id": "calendar.guust",
@@ -2283,20 +2283,71 @@ class TestRenderCalendar:
         ]
         zonder = self._render(events=events)
         met = self._render({"show_calendar": True}, events=events)
-        assert self._inkt(met) == self._inkt(zonder)
+        assert self._inkt(met) > self._inkt(zonder)
 
-    def test_name_match_ignores_case(self) -> None:
+    @pytest.mark.parametrize("positie", ["inline", "column", "below_time"])
+    def test_every_position_draws_the_name(self, positie: str) -> None:
         events = [
             {
-                "entity_id": "calendar.pim",
-                "calendar": "Pim",
-                "start": f"{dt.date.today()}T16:30:00",
-                "summary": "PIM hockey training",
+                "entity_id": "calendar.bas",
+                "calendar": "Bas",
+                "start": f"{dt.date.today()}T14:00:00",
+                "summary": "Avond",
             }
         ]
         zonder = self._render(events=events)
-        met = self._render({"show_calendar": True}, events=events)
-        assert self._inkt(met) == self._inkt(zonder)
+        met = self._render(
+            {"show_calendar": True, "calendar_position": positie},
+            events=events,
+        )
+        assert self._inkt(met) > self._inkt(zonder)
+
+    def test_max_chars_shortens_the_name(self) -> None:
+        """Long names get cut so the column keeps one width."""
+        events = [
+            {
+                "entity_id": "calendar.lyndenlaan",
+                "calendar": "Lyndenlaan",
+                "start": f"{dt.date.today()}T09:00:00",
+                "summary": "Papier",
+            }
+        ]
+        heel = self._render(
+            {"show_calendar": True, "calendar_position": "inline"},
+            events=events,
+        )
+        kort = self._render(
+            {
+                "show_calendar": True,
+                "calendar_position": "inline",
+                "calendar_max_chars": 3,
+            },
+            events=events,
+        )
+        assert self._inkt(kort) < self._inkt(heel)
+
+    def test_below_time_leaves_more_room_for_the_summary(self) -> None:
+        """The point of below_time: the summary keeps the full width."""
+        events = [
+            {
+                "entity_id": "calendar.familie",
+                "calendar": "Familie",
+                "start": f"{dt.date.today()}T10:15:00",
+                "summary": (
+                    "Verhuizing Stephan en Marlies uitgesteld naar okt"
+                ),
+            }
+        ]
+        inline = self._render(
+            {"show_calendar": True, "calendar_position": "inline"},
+            events=events,
+        )
+        onder = self._render(
+            {"show_calendar": True, "calendar_position": "below_time"},
+            events=events,
+        )
+        # Meer inkt op de regel betekent dat er meer van de titel past.
+        assert self._inkt(onder) > self._inkt(inline)
 
     def test_unparsable_events_are_skipped_not_fatal(self) -> None:
         kapot = [{"entity_id": "calendar.c0", "start": "", "summary": "x"}]
@@ -2315,7 +2366,7 @@ class TestRenderCalendar:
             for i in range(30)
         ]
         img = self._render({"max_events": 30, "row_height": 30}, events=events)
-        # De onderste 30 pixels moeten leeg zijn: daar paste geen hele dag meer.
+        # De onderste 30 pixels zijn leeg: daar paste geen hele dag meer.
         onderkant = img.crop((0, img.height - 30, img.width, img.height))
         assert sum(onderkant.histogram()[:128]) == 0
 

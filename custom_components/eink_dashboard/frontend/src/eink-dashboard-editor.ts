@@ -69,7 +69,7 @@ export const WIDGET_TYPES: Record<string, WidgetTypeMeta> = {
   },
   calendar: {
     label: "Calendar",
-    defaults: { type: "calendar", x: 24, y: 0, w: 0, title: "", entities: [], font_size: FONT_SIZE_CALENDAR, days: 14, max_events: 8, show_calendar: false },
+    defaults: { type: "calendar", x: 24, y: 0, w: 0, title: "", entities: [], font_size: FONT_SIZE_CALENDAR, days: 14, max_events: 8, show_calendar: false, calendar_position: "column", calendar_font_size: 14, calendar_width: 58, calendar_max_chars: 7 },
   },
 };
 
@@ -235,6 +235,21 @@ export const SCHEMAS: Record<string, (d: DisplayConfig) => HaFormSchema[]> = {
     },
     { name: "row_height", selector: { number: { min: 10, max: 80, mode: "box" } } },
     { name: "show_calendar", selector: { boolean: {} } },
+    { name: "calendar_position", default: "column", selector: { select: {
+      mode: "dropdown",
+      options: [
+        { value: "column", label: "Own column" },
+        { value: "inline", label: "In front of the summary" },
+        { value: "below_time", label: "Under the time" },
+      ],
+    } } },
+    {
+      type: "grid", name: "", schema: [
+        { name: "calendar_font_size", selector: { number: { min: 8, max: 40, mode: "box" } } },
+        { name: "calendar_max_chars", selector: { number: { min: 1, max: 30, mode: "box" } } },
+        { name: "calendar_width", selector: { number: { min: 10, max: 200, mode: "box" } } },
+      ],
+    },
   ],
 
   chart: (d) => [
@@ -294,6 +309,10 @@ export const LABELS: Record<string, string> = {
   max_events: "Maximum events",
   row_height: "Row height",
   show_calendar: "Show calendar name",
+  calendar_position: "Name position",
+  calendar_font_size: "Name font size",
+  calendar_max_chars: "Name max characters",
+  calendar_width: "Name column width",
   y_min: "Y-axis min",
   y_max: "Y-axis max",
 };
