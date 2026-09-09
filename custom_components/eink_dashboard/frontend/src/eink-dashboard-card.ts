@@ -1750,7 +1750,9 @@ class EinkDashboardCard extends HTMLElement {
       hours = parseInt(h, 10);
       minutes = parseInt(m ?? "0", 10);
     } else {
-      const now = new Date();
+      const now = new Date(
+        Date.now() + (widget.offset_minutes ?? 0) * 60_000,
+      );
       hours = now.getHours();
       minutes = now.getMinutes();
     }

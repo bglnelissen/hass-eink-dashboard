@@ -179,6 +179,7 @@ export interface ClockWidget extends WidgetBase {
   circle_width?: number;
   hand_width?: number;
   center_dot?: boolean;
+  offset_minutes?: number;
   time?: string;
 }
 

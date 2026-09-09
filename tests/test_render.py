@@ -2494,6 +2494,30 @@ class TestRenderClock:
         met = self._render({"time": "10:10", "center_dot": True})
         assert self._inkt(met) > self._inkt(zonder)
 
+    def test_offset_winds_the_clock_forward(self) -> None:
+        """The screen lags, so the hands may run ahead to compensate."""
+        from unittest.mock import patch
+
+        import custom_components.eink_dashboard.render as R
+
+        vast = dt.datetime(2026, 9, 9, 10, 0)
+
+        class NepDatetime(dt.datetime):
+            @classmethod
+            def now(cls, tz=None):
+                return vast
+
+        with patch.object(R, "datetime", NepDatetime):
+            zonder = self._render()
+            met = self._render({"offset_minutes": 30})
+        assert zonder.tobytes() != met.tobytes()
+
+    def test_offset_is_ignored_for_a_fixed_time(self) -> None:
+        """A time given by hand must be drawn exactly as given."""
+        kaal = self._render({"time": "04:20"})
+        met = self._render({"time": "04:20", "offset_minutes": 30})
+        assert kaal.tobytes() == met.tobytes()
+
     def test_midnight_does_not_crash(self) -> None:
         """Hour 0 must map to 12 o'clock, not to an angle of nothing."""
         assert_has_dark_pixels(self._render({"time": "00:00"}), 0, 0, 80, 80)

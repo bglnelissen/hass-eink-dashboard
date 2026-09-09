@@ -8,7 +8,7 @@ import logging
 import math
 from collections.abc import Callable
 from dataclasses import dataclass
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import Any, NamedTuple
 
@@ -1982,8 +1982,10 @@ def render_clock(
     """Draw a plain analog clock: a circle and two hands, nothing else.
 
     Shows the moment the dashboard was rendered, so you can tell at a glance
-    how stale the screen is. Pass "time" as "HH:MM" to draw a fixed time,
-    which is what the tests do.
+    how stale the screen is. Set offset_minutes to wind it forward by the
+    average lag of the chain, which makes it a better estimate of the time
+    right now. Pass "time" as "HH:MM" to draw a fixed time, which is what
+    the tests do; offset_minutes is ignored then.
 
     Drawn four times oversized and scaled back down, because a small circle
     straight onto the canvas comes out visibly stepped. On a 2-bit panel the
@@ -2002,7 +2004,13 @@ def render_clock(
         uur_str, _, min_str = str(tijd).partition(":")
         uren, minuten = int(uur_str), int(min_str or 0)
     else:
-        nu = datetime.now()
+        # An e-ink screen is always behind: this image was rendered, then
+        # picked up, then drawn, each on its own schedule. offset_minutes
+        # winds the clock forward by the average of that lag, so the hands
+        # are a better guess at the time you are reading them.
+        nu = datetime.now() + timedelta(
+            minutes=float(widget.get("offset_minutes", 0))
+        )
         uren, minuten = nu.hour, nu.minute
 
     schaal = 4

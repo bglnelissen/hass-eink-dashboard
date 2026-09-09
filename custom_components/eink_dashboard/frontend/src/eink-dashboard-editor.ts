@@ -69,7 +69,7 @@ export const WIDGET_TYPES: Record<string, WidgetTypeMeta> = {
   },
   clock: {
     label: "Clock (analog)",
-    defaults: { type: "clock", x: 24, y: 0, radius: 23, circle_width: 1, hand_width: 2, center_dot: false, color: 0 },
+    defaults: { type: "clock", x: 24, y: 0, radius: 23, circle_width: 1, hand_width: 2, center_dot: false, color: 0, offset_minutes: 0 },
   },
   calendar: {
     label: "Calendar",
@@ -242,6 +242,7 @@ export const SCHEMAS: Record<string, (d: DisplayConfig) => HaFormSchema[]> = {
       ],
     },
     { name: "center_dot", selector: { boolean: {} } },
+    { name: "offset_minutes", default: 0, selector: { number: { min: 0, max: 60, step: 1, mode: "box" } } },
   ],
 
   calendar: (d) => [
@@ -339,6 +340,7 @@ export const LABELS: Record<string, string> = {
   circle_width: "Circle thickness",
   hand_width: "Hand thickness",
   center_dot: "Dot at the centre",
+  offset_minutes: "Wind forward (minutes)",
   y_min: "Y-axis min",
   y_max: "Y-axis max",
 };
