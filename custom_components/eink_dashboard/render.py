@@ -19,6 +19,12 @@ from .const import (
     COLOR_GRAY,
     COLOR_LIGHT_GRAY,
     COLOR_WHITE,
+    DEFAULT_CALENDAR_MAX_EVENTS,
+    DEFAULT_DAY_NAMES,
+    DEFAULT_MONTH_NAMES,
+    DEFAULT_TODAY_LABEL,
+    DEFAULT_TOMORROW_LABEL,
+    FONT_SIZE_CALENDAR,
     FONT_SIZE_DEVICE_BATTERY,
     FONT_SIZE_SENSOR_ROWS,
     FONT_SIZE_STATUS_ICONS,
@@ -1688,6 +1694,151 @@ def render_chart(  # noqa: C901
             img.paste(rotated, (x, label_y))
 
 
+def _parse_event_start(raw: str) -> tuple[date, str] | None:
+    """Split an event start into its date and a HH:MM string.
+
+    All-day events arrive as a bare date and get an empty time.
+    """
+    if not raw:
+        return None
+    try:
+        if len(raw) == 10:
+            return date.fromisoformat(raw), ""
+        moment = datetime.fromisoformat(raw)
+    except ValueError:
+        _LOGGER.debug("render_calendar: unparsable start %r", raw)
+        return None
+    return moment.date(), moment.strftime("%H:%M")
+
+
+def _day_heading(
+    day: date,
+    today: date,
+    day_names: list[str],
+    month_names: list[str],
+    today_label: str,
+    tomorrow_label: str,
+) -> str:
+    """Return 'Today', 'Tomorrow' or 'Fri 11 Sep' for a day heading."""
+    delta = (day - today).days
+    if delta == 0:
+        return today_label
+    if delta == 1:
+        return tomorrow_label
+    return f"{day_names[day.weekday()]} {day.day} {month_names[day.month - 1]}"
+
+
+def _fit_text(
+    draw: ImageDraw.ImageDraw,
+    text: str,
+    font: ImageFont.FreeTypeFont | ImageFont.ImageFont,
+    max_width: int,
+) -> str:
+    """Shorten text with an ellipsis until it fits within max_width."""
+    if draw.textlength(text, font=font) <= max_width:
+        return text
+    kort = text
+    while kort and draw.textlength(kort + "\u2026", font=font) > max_width:
+        kort = kort[:-1]
+    return (kort.rstrip() + "\u2026") if kort else ""
+
+
+def render_calendar(
+    draw: ImageDraw.ImageDraw,
+    widget: Widget,
+    config: DisplayConfig,
+) -> None:
+    """Draw upcoming calendar events, grouped under a heading per day.
+
+    Events come from config["calendar_events"], already sorted by start and
+    fetched through the calendar.get_events service. Set the entities field
+    to show only some of the calendars that were fetched.
+    """
+    x = widget.get("x", PADDING)
+    y = widget.get("y", 0)
+    font_size = widget.get("font_size", FONT_SIZE_CALENDAR)
+    title = widget.get("title", "")
+    right_edge = _compute_right_edge(x, widget, config["width"])
+
+    s = font_size / FONT_SIZE_CALENDAR
+    font_row = _load_font(font_size, font=widget.get("font", "roboto"))
+    font_day = _load_font(
+        round(font_size * 0.8), font=widget.get("font", "roboto_medium")
+    )
+    font_title = _load_font(round(26 * s), font="roboto_medium")
+
+    row_height = round(widget.get("row_height", font_size + 8))
+    day_gap = round(font_size * 0.9)
+    time_width = round(font_size * 2.9)
+
+    y = _draw_section_title(draw, x, y, title, font_title, 34, s)
+
+    events = config.get("calendar_events", []) or []
+    wanted = widget.get("entities", [])
+    if wanted:
+        events = [e for e in events if e.get("entity_id") in wanted]
+
+    max_events = widget.get("max_events", DEFAULT_CALENDAR_MAX_EVENTS)
+    day_names = widget.get("day_names") or DEFAULT_DAY_NAMES
+    month_names = widget.get("month_names") or DEFAULT_MONTH_NAMES
+    today_label = widget.get("today_label") or DEFAULT_TODAY_LABEL
+    tomorrow_label = widget.get("tomorrow_label") or DEFAULT_TOMORROW_LABEL
+
+    today = date.today()
+    bottom = config.get("height", 0)
+    huidige_dag: date | None = None
+    getekend = 0
+
+    for event in events:
+        if getekend >= max_events:
+            break
+        gesplitst = _parse_event_start(event.get("start", ""))
+        if gesplitst is None:
+            continue
+        dag, tijdstip = gesplitst
+
+        if dag != huidige_dag:
+            if huidige_dag is not None:
+                y += day_gap
+            if bottom and y + row_height > bottom:
+                break
+            draw.text(
+                (x, y),
+                _day_heading(
+                    dag,
+                    today,
+                    day_names,
+                    month_names,
+                    today_label,
+                    tomorrow_label,
+                ),
+                fill=COLOR_BLACK,
+                font=font_day,
+            )
+            y += round(font_size * 0.95)
+            huidige_dag = dag
+
+        if bottom and y + row_height > bottom:
+            break
+
+        if tijdstip:
+            draw.text((x, y), tijdstip, fill=COLOR_GRAY, font=font_row)
+        tekst_x = x + time_width
+        draw.text(
+            (tekst_x, y),
+            _fit_text(
+                draw,
+                str(event.get("summary") or ""),
+                font_row,
+                right_edge - tekst_x,
+            ),
+            fill=COLOR_BLACK,
+            font=font_row,
+        )
+        y += row_height
+        getekend += 1
+
+
 _RENDERERS: dict[WidgetType, RendererFn] = {
     WidgetType.TEXT: render_text,
     WidgetType.TEXT_MULTILINE: render_text_multiline,
@@ -1699,6 +1850,7 @@ _RENDERERS: dict[WidgetType, RendererFn] = {
     WidgetType.STATUS_ICONS: render_status_icons,
     WidgetType.WASTE_SCHEDULE: render_waste_schedule,
     WidgetType.CHART: render_chart,
+    WidgetType.CALENDAR: render_calendar,
 }
 
 

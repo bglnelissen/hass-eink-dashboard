@@ -173,6 +173,19 @@ export interface WasteScheduleWidget extends WidgetBase {
   entities?: string[];
 }
 
+export interface CalendarWidget extends WidgetBase {
+  type: "calendar";
+  title?: string;
+  entities?: string[];
+  days?: number;
+  max_events?: number;
+  row_height?: number;
+  day_names?: string[];
+  month_names?: string[];
+  today_label?: string;
+  tomorrow_label?: string;
+}
+
 export interface ChartWidget extends WidgetBase {
   type: "chart";
   h?: number;
@@ -200,7 +213,9 @@ export type Widget =
   | DeviceBatteryWidget
   | StatusIconsWidget
   | WasteScheduleWidget
-  | ChartWidget;
+  | ChartWidget
+  | CalendarWidget
+;
 
 export interface WidgetTypeMeta {
   label: string;

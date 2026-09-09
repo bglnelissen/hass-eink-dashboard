@@ -13,6 +13,7 @@ import type {
   SensorRowsWidget,
   DeviceBatteryWidget,
   StatusIconsWidget,
+  CalendarWidget,
   WasteScheduleWidget,
   ChartWidget,
   LayoutResponse,
@@ -77,6 +78,7 @@ const FONT_SIZE_SENSOR_ROWS = 32;
 const FONT_SIZE_DEVICE_BATTERY = 24;
 const FONT_SIZE_STATUS_ICONS = 28;
 const FONT_SIZE_WASTE_SCHEDULE = 28;
+const FONT_SIZE_CALENDAR = 22;
 
 let _robotoLoaded = false;
 async function _loadRoboto(): Promise<void> {
@@ -986,6 +988,7 @@ class EinkDashboardCard extends HTMLElement {
       device_battery: (w) => this._renderDeviceBattery(ctx, w as DeviceBatteryWidget),
       status_icons: (w) => this._renderStatusIcons(ctx, w as StatusIconsWidget),
       waste_schedule: (w) => this._renderWasteSchedule(ctx, w as WasteScheduleWidget),
+      calendar: (w) => this._renderCalendar(ctx, w as CalendarWidget),
     };
 
     this._widgetBounds = [];
@@ -1642,6 +1645,63 @@ class EinkDashboardCard extends HTMLElement {
       ctx.fillText(dateStr, rightEdge - PADDING - dateW, y);
 
       y += rowH;
+    }
+    return { x, y: origY, w: rightEdge - x, h: Math.max(y - origY, 20) };
+  }
+
+  /**
+   * Preview of the calendar widget.
+   *
+   * This is an approximation on purpose. The device render calls
+   * calendar.get_events and lists every appointment in the window, but the
+   * canvas only has entity state to work with, which holds the next event
+   * per calendar. So the preview shows one row per selected calendar: enough
+   * to size and place the widget, not a faithful copy of the output.
+   */
+  private _renderCalendar(ctx: CanvasRenderingContext2D, widget: CalendarWidget): WidgetBounds {
+    const { x, y: origY, fontSize, rightEdge } = this._getWidgetBase(widget, FONT_SIZE_CALENDAR);
+    let y = origY;
+    const sc = fontSize / FONT_SIZE_CALENDAR;
+    const rowH = Math.round(widget.row_height ?? fontSize + 8);
+    const timeW = Math.round(fontSize * 2.9);
+
+    ctx.textBaseline = "top";
+    ctx.textAlign = "left";
+
+    if (widget.title) {
+      ctx.font = `${Math.round(26 * sc)}px ${FONT_FAMILY}`;
+      ctx.fillStyle = grayColor(COLOR_BLACK);
+      ctx.fillText(widget.title, x, y);
+      y += Math.round(34 * sc);
+    }
+
+    const max = widget.max_events ?? 8;
+    let drawn = 0;
+    for (const entityId of widget.entities ?? []) {
+      if (drawn >= max) break;
+      const stateObj = this._getState(entityId);
+      if (!stateObj) continue;
+      const attrs = stateObj.attributes as Record<string, string | null>;
+      const summary = String(attrs.message ?? "");
+      if (!summary) continue;
+      const rawStart = String(attrs.start_time ?? "");
+      const time = rawStart.length >= 16 ? rawStart.slice(11, 16) : "";
+
+      ctx.font = `${fontSize}px ${FONT_FAMILY}`;
+      if (time) {
+        ctx.fillStyle = grayColor(COLOR_GRAY);
+        ctx.fillText(time, x, y);
+      }
+      ctx.fillStyle = grayColor(COLOR_BLACK);
+      let text = summary;
+      const maxW = rightEdge - (x + timeW);
+      while (text.length > 1 && ctx.measureText(`${text}\u2026`).width > maxW) {
+        text = text.slice(0, -1);
+      }
+      ctx.fillText(text === summary ? text : `${text}\u2026`, x + timeW, y);
+
+      y += rowH;
+      drawn++;
     }
     return { x, y: origY, w: rightEdge - x, h: Math.max(y - origY, 20) };
   }

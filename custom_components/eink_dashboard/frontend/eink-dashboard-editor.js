@@ -8,6 +8,7 @@ const FONT_SIZE_SENSOR_ROWS = 32;
 const FONT_SIZE_DEVICE_BATTERY = 24;
 const FONT_SIZE_STATUS_ICONS = 28;
 const FONT_SIZE_WASTE_SCHEDULE = 28;
+const FONT_SIZE_CALENDAR = 22;
 // ── Widget type registry ──────────────────────────────────────────────────────
 export const WIDGET_TYPES = {
     text: {
@@ -49,6 +50,10 @@ export const WIDGET_TYPES = {
     chart: {
         label: "Chart",
         defaults: { type: "chart", x: 24, y: 0, w: 0, h: 200, config: { graph_span: "24h", series: [], yaxis: [] } },
+    },
+    calendar: {
+        label: "Calendar",
+        defaults: { type: "calendar", x: 24, y: 0, w: 0, title: "", entities: [], font_size: FONT_SIZE_CALENDAR, days: 14, max_events: 8 },
     },
 };
 // ── ha-form schema builders ──────────────────────────────────────────────────
@@ -183,6 +188,19 @@ export const SCHEMAS = {
         { name: "title", selector: { text: {} } },
         { name: "entities", selector: { entity: { multiple: true } } },
     ],
+    calendar: (d) => [
+        { type: "grid", name: "", schema: posXYW(d) },
+        fontRow(FONT_SIZE_CALENDAR),
+        { name: "title", selector: { text: {} } },
+        { name: "entities", required: true, selector: { entity: { multiple: true, filter: [{ domain: "calendar" }] } } },
+        {
+            type: "grid", name: "", schema: [
+                { name: "days", default: 14, selector: { number: { min: 1, max: 90, mode: "box" } } },
+                { name: "max_events", default: 8, selector: { number: { min: 1, max: 40, mode: "box" } } },
+            ],
+        },
+        { name: "row_height", selector: { number: { min: 10, max: 80, mode: "box" } } },
+    ],
     chart: (d) => [
         {
             type: "grid", name: "", schema: [
@@ -235,6 +253,9 @@ export const LABELS = {
     legend: "Legend",
     title_font_size: "Title font size",
     label_font_size: "Axis label font size",
+    days: "Days ahead",
+    max_events: "Maximum events",
+    row_height: "Row height",
     y_min: "Y-axis min",
     y_max: "Y-axis max",
 };
@@ -263,7 +284,7 @@ export function getSummary(widget) {
     if (t === "device_battery") {
         return "Device battery";
     }
-    if (t === "sensor_rows" || t === "status_icons" || t === "waste_schedule") {
+    if (t === "sensor_rows" || t === "status_icons" || t === "waste_schedule" || t === "calendar") {
         const title = widget.title ? `${widget.title} — ` : "";
         const count = (widget.entities || []).length;
         return `${title}${count} entit${count === 1 ? "y" : "ies"}`;

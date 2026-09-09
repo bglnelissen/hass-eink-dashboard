@@ -16,13 +16,16 @@ from custom_components.eink_dashboard.const import (
 from custom_components.eink_dashboard.render import (
     WidgetMetrics,
     _compute_metrics,
+    _day_heading,
     _draw_card_container,
     _draw_card_row,
     _draw_chip,
     _draw_chip_flow,
+    _fit_text,
     _format_relative_date,
     _load_font,
     _parse_days_until,
+    _parse_event_start,
     render_dashboard,
 )
 from tests.helpers import (
@@ -2111,3 +2114,153 @@ class TestChartAxisOverrides:
         )
         zonder = render_dashboard([self._widget()], self._config())
         assert alleen_max != zonder
+
+
+class TestCalendarHelpers:
+    """Pure helpers behind the calendar widget."""
+
+    def test_timed_event_splits_into_date_and_time(self) -> None:
+        assert _parse_event_start("2026-09-11T13:30:00+02:00") == (
+            dt.date(2026, 9, 11),
+            "13:30",
+        )
+
+    def test_all_day_event_has_no_time(self) -> None:
+        assert _parse_event_start("2026-09-11") == (
+            dt.date(2026, 9, 11),
+            "",
+        )
+
+    @pytest.mark.parametrize("raw", ["", "not a date", "2026-13-45"])
+    def test_unparsable_start_returns_none(self, raw: str) -> None:
+        assert _parse_event_start(raw) is None
+
+    def test_heading_says_today_and_tomorrow(self) -> None:
+        today = dt.date(2026, 9, 9)
+        args = (
+            ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"],
+            [
+                "Jan",
+                "Feb",
+                "Mar",
+                "Apr",
+                "May",
+                "Jun",
+                "Jul",
+                "Aug",
+                "Sep",
+                "Oct",
+                "Nov",
+                "Dec",
+            ],
+            "Today",
+            "Tomorrow",
+        )
+        assert _day_heading(today, today, *args) == "Today"
+        assert _day_heading(dt.date(2026, 9, 10), today, *args) == "Tomorrow"
+        assert _day_heading(dt.date(2026, 9, 11), today, *args) == "Fri 11 Sep"
+
+    def test_heading_uses_the_supplied_names(self) -> None:
+        """Day and month names are overridable, so another language works."""
+        heading = _day_heading(
+            dt.date(2026, 9, 11),
+            dt.date(2026, 9, 9),
+            ["ma", "di", "wo", "do", "vr", "za", "zo"],
+            [
+                "jan",
+                "feb",
+                "mrt",
+                "apr",
+                "mei",
+                "jun",
+                "jul",
+                "aug",
+                "sep",
+                "okt",
+                "nov",
+                "dec",
+            ],
+            "vandaag",
+            "morgen",
+        )
+        assert heading == "vr 11 sep"
+
+    def test_fit_text_shortens_with_an_ellipsis(self) -> None:
+        font = _load_font(20)
+        img = Image.new("L", (200, 50), 255)
+        draw = ImageDraw.Draw(img)
+        kort = _fit_text(draw, "a very long appointment title", font, 60)
+        assert kort.endswith("\u2026")
+        assert draw.textlength(kort, font=font) <= 60
+
+    def test_fit_text_leaves_short_text_alone(self) -> None:
+        font = _load_font(20)
+        draw = ImageDraw.Draw(Image.new("L", (200, 50), 255))
+        assert _fit_text(draw, "ok", font, 200) == "ok"
+
+
+class TestRenderCalendar:
+    """The calendar widget drawing events from config['calendar_events']."""
+
+    @staticmethod
+    def _events(aantal: int = 3) -> list[dict]:
+        vandaag = dt.date.today()
+        return [
+            {
+                "entity_id": f"calendar.c{i % 2}",
+                "calendar": f"C{i % 2}",
+                "start": f"{vandaag + dt.timedelta(days=i)}T09:0{i}:00",
+                "summary": f"Event {i}",
+                "all_day": False,
+            }
+            for i in range(aantal)
+        ]
+
+    @staticmethod
+    def _render(widget_extra=None, events=None) -> Image.Image:
+        widget = {"type": "calendar", "x": 10, "y": 10, "w": 380}
+        widget.update(widget_extra or {})
+        png = render_dashboard(
+            [widget],
+            {
+                "width": 400,
+                "height": 480,
+                "calendar_events": events or [],
+            },
+        )
+        return png_to_image(png)
+
+    @staticmethod
+    def _inkt(img: Image.Image) -> int:
+        """Number of dark pixels, a rough proxy for how much was drawn."""
+        return sum(img.histogram()[:128])
+
+    def test_no_events_draws_nothing(self) -> None:
+        assert_all_white(self._render(events=[]), 0, 0, 400, 480)
+
+    def test_events_are_drawn(self) -> None:
+        assert_has_dark_pixels(
+            self._render(events=self._events()), 0, 0, 400, 480
+        )
+
+    def test_max_events_limits_the_list(self) -> None:
+        veel = self._render({"max_events": 6}, events=self._events(6))
+        weinig = self._render({"max_events": 2}, events=self._events(6))
+        assert self._inkt(veel) > self._inkt(weinig)
+
+    def test_entities_filter_hides_other_calendars(self) -> None:
+        alles = self._render(events=self._events(4))
+        een = self._render(
+            {"entities": ["calendar.c0"]}, events=self._events(4)
+        )
+        assert self._inkt(een) < self._inkt(alles)
+
+    def test_unparsable_events_are_skipped_not_fatal(self) -> None:
+        kapot = [{"entity_id": "calendar.c0", "start": "", "summary": "x"}]
+        assert_all_white(self._render(events=kapot), 0, 0, 400, 480)
+
+    def test_events_stop_at_the_bottom_edge(self) -> None:
+        """A long list must not draw past the canvas."""
+        img = self._render({"max_events": 50}, events=self._events(50))
+        onderste_rij = [img.getpixel((x, 479)) for x in range(400)]
+        assert all(p == 255 for p in onderste_rij)

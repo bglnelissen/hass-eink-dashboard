@@ -28,6 +28,7 @@ FONT_SIZE_SENSOR_ROWS = 32
 FONT_SIZE_DEVICE_BATTERY = 24
 FONT_SIZE_STATUS_ICONS = 28
 FONT_SIZE_WASTE_SCHEDULE = 28
+FONT_SIZE_CALENDAR = 22
 
 
 @dataclass(frozen=True)
@@ -165,3 +166,28 @@ class WidgetType(StrEnum):
     STATUS_ICONS = "status_icons"
     WASTE_SCHEDULE = "waste_schedule"
     CHART = "chart"
+    CALENDAR = "calendar"
+
+
+# Calendar widget defaults.
+DEFAULT_CALENDAR_DAYS = 14
+DEFAULT_CALENDAR_MAX_EVENTS = 8
+# Day and month abbreviations used for calendar day headings. Override per
+# widget with the day_names / month_names fields to render another language.
+DEFAULT_DAY_NAMES = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+DEFAULT_MONTH_NAMES = [
+    "Jan",
+    "Feb",
+    "Mar",
+    "Apr",
+    "May",
+    "Jun",
+    "Jul",
+    "Aug",
+    "Sep",
+    "Oct",
+    "Nov",
+    "Dec",
+]
+DEFAULT_TODAY_LABEL = "Today"
+DEFAULT_TOMORROW_LABEL = "Tomorrow"

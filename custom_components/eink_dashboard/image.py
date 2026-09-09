@@ -28,6 +28,7 @@ from homeassistant.util import dt as dt_util
 from PIL import Image
 
 from .const import (
+    DEFAULT_CALENDAR_DAYS,
     DEFAULT_CONTRAST,
     DEFAULT_GRAYSCALE_LEVELS,
     DEFAULT_HEIGHT,
@@ -193,6 +194,9 @@ class EinkDashboardImage(ImageEntity):
                 states = self._build_states()
                 await self._async_fetch_forecasts(states)
                 histories = await self._async_fetch_histories()
+                calendar_events = await self._async_fetch_calendar_events(
+                    states
+                )
                 config = {
                     "width": self._entry.options.get("width", DEFAULT_WIDTH),
                     "height": self._entry.options.get(
@@ -213,6 +217,7 @@ class EinkDashboardImage(ImageEntity):
                     ),
                     "states": states,
                     "histories": histories,
+                    "calendar_events": calendar_events,
                 }
                 battery_sensor = self.hass.data[DOMAIN][
                     self._entry.entry_id
@@ -320,6 +325,80 @@ class EinkDashboardImage(ImageEntity):
                 states[entity_id]["attributes"]["forecast"] = forecast
             except Exception:
                 _LOGGER.debug("Could not fetch forecast for %s", entity_id)
+
+    async def _async_fetch_calendar_events(
+        self, states: dict[str, Any]
+    ) -> list[dict[str, Any]]:
+        """Collect upcoming events for every calendar widget on this board.
+
+        One calendar.get_events call covers all requested entities. The
+        results are flattened, tagged with their entity and calendar name,
+        and sorted by start so the renderer can just walk the list.
+        """
+        entity_ids: set[str] = set()
+        days = 0
+        for widget in self._widgets:
+            if widget.get("type") != WidgetType.CALENDAR:
+                continue
+            entity_ids.update(e for e in widget.get("entities", []) if e)
+            days = max(days, int(widget.get("days", DEFAULT_CALENDAR_DAYS)))
+
+        if not entity_ids:
+            return []
+
+        start = dt_util.now()
+        try:
+            result = await self.hass.services.async_call(
+                "calendar",
+                "get_events",
+                {
+                    "entity_id": sorted(entity_ids),
+                    "start_date_time": start.isoformat(),
+                    "end_date_time": (
+                        start + timedelta(days=days or DEFAULT_CALENDAR_DAYS)
+                    ).isoformat(),
+                },
+                blocking=True,
+                return_response=True,
+            )
+        except Exception:
+            _LOGGER.warning(
+                "Could not fetch calendar events for %s",
+                sorted(entity_ids),
+                exc_info=True,
+            )
+            return []
+
+        events: list[dict[str, Any]] = []
+        for entity_id, payload in (result or {}).items():
+            label = (
+                states.get(entity_id, {})
+                .get("attributes", {})
+                .get("friendly_name", entity_id)
+            )
+            for event in (payload or {}).get("events", []) or []:
+                start_raw = event.get("start")
+                if not start_raw:
+                    continue
+                events.append(
+                    {
+                        "entity_id": entity_id,
+                        "calendar": label,
+                        "start": start_raw,
+                        "end": event.get("end"),
+                        "summary": event.get("summary", ""),
+                        "location": event.get("location", ""),
+                        "all_day": len(str(start_raw)) == 10,
+                    }
+                )
+
+        events.sort(key=lambda e: str(e["start"]))
+        _LOGGER.debug(
+            "_async_fetch_calendar_events: %d events from %d calendars",
+            len(events),
+            len(entity_ids),
+        )
+        return events
 
     async def _async_fetch_histories(self) -> dict[str, list[dict]]:
         """Fetch recorder history for all chart widget entities."""
