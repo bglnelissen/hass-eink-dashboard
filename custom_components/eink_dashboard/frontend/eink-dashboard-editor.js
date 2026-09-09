@@ -51,6 +51,10 @@ export const WIDGET_TYPES = {
         label: "Chart",
         defaults: { type: "chart", x: 24, y: 0, w: 0, h: 200, config: { graph_span: "24h", series: [], yaxis: [] } },
     },
+    clock: {
+        label: "Clock (analog)",
+        defaults: { type: "clock", x: 24, y: 0, radius: 23, circle_width: 1, hand_width: 2, center_dot: false, color: 0 },
+    },
     calendar: {
         label: "Calendar",
         defaults: { type: "calendar", x: 24, y: 0, w: 0, title: "", entities: [], font_size: FONT_SIZE_CALENDAR, days: 14, max_events: 8, show_calendar: false, calendar_position: "column", calendar_font_size: 14, calendar_width: 58, calendar_max_chars: 7 },
@@ -188,6 +192,23 @@ export const SCHEMAS = {
         { name: "title", selector: { text: {} } },
         { name: "entities", selector: { entity: { multiple: true } } },
     ],
+    clock: (d) => [
+        {
+            type: "grid", name: "", schema: [
+                { name: "x", required: true, selector: { number: { min: 0, max: d.width, mode: "box" } } },
+                { name: "y", required: true, selector: { number: { min: 0, max: d.height, mode: "box" } } },
+                { name: "radius", default: 23, selector: { number: { min: 6, max: 120, mode: "box" } } },
+            ],
+        },
+        {
+            type: "grid", name: "", schema: [
+                { name: "circle_width", default: 1, selector: { number: { min: 1, max: 8, mode: "box" } } },
+                { name: "hand_width", default: 2, selector: { number: { min: 1, max: 8, mode: "box" } } },
+                colorSelector(),
+            ],
+        },
+        { name: "center_dot", selector: { boolean: {} } },
+    ],
     calendar: (d) => [
         { type: "grid", name: "", schema: posXYW(d) },
         fontRow(FONT_SIZE_CALENDAR),
@@ -277,6 +298,10 @@ export const LABELS = {
     calendar_font_size: "Name font size",
     calendar_max_chars: "Name max characters",
     calendar_width: "Name column width",
+    radius: "Radius",
+    circle_width: "Circle thickness",
+    hand_width: "Hand thickness",
+    center_dot: "Dot at the centre",
     y_min: "Y-axis min",
     y_max: "Y-axis max",
 };

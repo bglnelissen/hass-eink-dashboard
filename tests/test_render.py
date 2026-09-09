@@ -2452,3 +2452,48 @@ class TestEmojiFallback:
             {"width": 80, "height": 50},
         )
         assert met != zonder
+
+
+class TestRenderClock:
+    """The analog clock: a circle and two hands, nothing else."""
+
+    @staticmethod
+    def _render(extra=None) -> Image.Image:
+        widget = {"type": "clock", "x": 10, "y": 10, "radius": 20}
+        widget.update(extra or {})
+        return png_to_image(
+            render_dashboard([widget], {"width": 80, "height": 80})
+        )
+
+    @staticmethod
+    def _inkt(img: Image.Image) -> int:
+        return sum(img.histogram()[:200])
+
+    def test_it_draws_something(self) -> None:
+        assert_has_dark_pixels(self._render({"time": "10:10"}), 0, 0, 80, 80)
+
+    def test_it_stays_inside_its_box(self) -> None:
+        """Nothing outside x..x+2r, so it cannot overlap its neighbours."""
+        img = self._render({"time": "10:10"})
+        rand = img.crop((0, 0, 80, 10))
+        assert sum(rand.histogram()[:128]) == 0
+
+    def test_a_fixed_time_renders_the_same_every_call(self) -> None:
+        eerst = self._render({"time": "03:25"})
+        weer = self._render({"time": "03:25"})
+        assert eerst.tobytes() == weer.tobytes()
+
+    def test_different_times_look_different(self) -> None:
+        assert (
+            self._render({"time": "03:00"}).tobytes()
+            != self._render({"time": "09:00"}).tobytes()
+        )
+
+    def test_center_dot_adds_ink(self) -> None:
+        zonder = self._render({"time": "10:10"})
+        met = self._render({"time": "10:10", "center_dot": True})
+        assert self._inkt(met) > self._inkt(zonder)
+
+    def test_midnight_does_not_crash(self) -> None:
+        """Hour 0 must map to 12 o'clock, not to an angle of nothing."""
+        assert_has_dark_pixels(self._render({"time": "00:00"}), 0, 0, 80, 80)

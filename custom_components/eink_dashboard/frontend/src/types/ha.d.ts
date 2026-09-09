@@ -173,6 +173,15 @@ export interface WasteScheduleWidget extends WidgetBase {
   entities?: string[];
 }
 
+export interface ClockWidget extends WidgetBase {
+  type: "clock";
+  radius?: number;
+  circle_width?: number;
+  hand_width?: number;
+  center_dot?: boolean;
+  time?: string;
+}
+
 export interface CalendarWidget extends WidgetBase {
   type: "calendar";
   title?: string;
@@ -220,6 +229,7 @@ export type Widget =
   | WasteScheduleWidget
   | ChartWidget
   | CalendarWidget
+  | ClockWidget
 ;
 
 export interface WidgetTypeMeta {

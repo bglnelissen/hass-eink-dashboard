@@ -14,6 +14,7 @@ import type {
   DeviceBatteryWidget,
   StatusIconsWidget,
   CalendarWidget,
+  ClockWidget,
   WasteScheduleWidget,
   ChartWidget,
   LayoutResponse,
@@ -989,6 +990,7 @@ class EinkDashboardCard extends HTMLElement {
       status_icons: (w) => this._renderStatusIcons(ctx, w as StatusIconsWidget),
       waste_schedule: (w) => this._renderWasteSchedule(ctx, w as WasteScheduleWidget),
       calendar: (w) => this._renderCalendar(ctx, w as CalendarWidget),
+      clock: (w) => this._renderClock(ctx, w as ClockWidget),
     };
 
     this._widgetBounds = [];
@@ -1728,6 +1730,56 @@ class EinkDashboardCard extends HTMLElement {
       drawn++;
     }
     return { x, y: origY, w: rightEdge - x, h: Math.max(y - origY, 20) };
+  }
+
+  /** Analog clock: a circle and two hands, mirroring render_clock. */
+  private _renderClock(ctx: CanvasRenderingContext2D, widget: ClockWidget): WidgetBounds {
+    const x = widget.x ?? PADDING;
+    const y = widget.y ?? 0;
+    const r = widget.radius ?? 23;
+    const circleW = widget.circle_width ?? 1;
+    const handW = widget.hand_width ?? 2;
+    const colour = grayColor(widget.color ?? COLOR_BLACK);
+    const cx = x + r + 1;
+    const cy = y + r + 1;
+
+    let hours: number;
+    let minutes: number;
+    if (widget.time) {
+      const [h, m] = widget.time.split(":");
+      hours = parseInt(h, 10);
+      minutes = parseInt(m ?? "0", 10);
+    } else {
+      const now = new Date();
+      hours = now.getHours();
+      minutes = now.getMinutes();
+    }
+
+    ctx.strokeStyle = colour;
+    ctx.lineWidth = circleW;
+    ctx.beginPath();
+    ctx.arc(cx, cy, r, 0, Math.PI * 2);
+    ctx.stroke();
+
+    const hand = (deg: number, len: number, width: number) => {
+      const a = ((deg - 90) * Math.PI) / 180;
+      ctx.lineWidth = width;
+      ctx.beginPath();
+      ctx.moveTo(cx, cy);
+      ctx.lineTo(cx + Math.cos(a) * len, cy + Math.sin(a) * len);
+      ctx.stroke();
+    };
+    hand(((hours % 12) + minutes / 60) * 30, r * 0.52, handW);
+    hand(minutes * 6, r * 0.78, handW * 0.8);
+
+    if (widget.center_dot) {
+      ctx.fillStyle = colour;
+      ctx.beginPath();
+      ctx.arc(cx, cy, handW * 0.9, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    return { x, y, w: r * 2 + 2, h: r * 2 + 2 };
   }
 }
 

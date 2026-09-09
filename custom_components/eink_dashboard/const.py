@@ -167,6 +167,7 @@ class WidgetType(StrEnum):
     WASTE_SCHEDULE = "waste_schedule"
     CHART = "chart"
     CALENDAR = "calendar"
+    CLOCK = "clock"
 
 
 # Calendar widget defaults.

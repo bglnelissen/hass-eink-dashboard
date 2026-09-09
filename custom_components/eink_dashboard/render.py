@@ -1974,6 +1974,79 @@ def render_calendar(
         getekend += 1
 
 
+def render_clock(
+    draw: ImageDraw.ImageDraw,
+    widget: Widget,
+    config: DisplayConfig,
+) -> None:
+    """Draw a plain analog clock: a circle and two hands, nothing else.
+
+    Shows the moment the dashboard was rendered, so you can tell at a glance
+    how stale the screen is. Pass "time" as "HH:MM" to draw a fixed time,
+    which is what the tests do.
+
+    Drawn four times oversized and scaled back down, because a small circle
+    straight onto the canvas comes out visibly stepped. On a 2-bit panel the
+    smoothed edge lands on the grey levels instead of disappearing.
+    """
+    x = widget.get("x", PADDING)
+    y = widget.get("y", 0)
+    straal = int(widget.get("radius", 18))
+    rand = float(widget.get("circle_width", 1))
+    wijzer = float(widget.get("hand_width", 2))
+    stip = bool(widget.get("center_dot", False))
+    kleur = widget.get("color", COLOR_BLACK)
+
+    tijd = widget.get("time")
+    if tijd:
+        uur_str, _, min_str = str(tijd).partition(":")
+        uren, minuten = int(uur_str), int(min_str or 0)
+    else:
+        nu = datetime.now()
+        uren, minuten = nu.hour, nu.minute
+
+    schaal = 4
+    zijde = (straal * 2 + 2) * schaal
+    doek = Image.new("L", (zijde, zijde), COLOR_WHITE)
+    tekenaar = ImageDraw.Draw(doek)
+    mid = zijde / 2
+    r_groot = straal * schaal
+
+    tekenaar.ellipse(
+        [mid - r_groot, mid - r_groot, mid + r_groot, mid + r_groot],
+        outline=kleur,
+        width=max(1, round(rand * schaal)),
+    )
+
+    def hand(hoek_graden: float, lengte: float, dikte: float) -> None:
+        hoek = math.radians(hoek_graden - 90)
+        tekenaar.line(
+            [
+                (mid, mid),
+                (mid + math.cos(hoek) * lengte, mid + math.sin(hoek) * lengte),
+            ],
+            fill=kleur,
+            width=max(1, round(dikte * schaal)),
+        )
+
+    hand((uren % 12 + minuten / 60) * 30, r_groot * 0.52, wijzer)
+    hand(minuten * 6, r_groot * 0.78, wijzer * 0.8)
+
+    if stip:
+        punt = max(1, round(wijzer * schaal * 0.9))
+        tekenaar.ellipse(
+            [mid - punt, mid - punt, mid + punt, mid + punt], fill=kleur
+        )
+
+    zijde_klein = straal * 2 + 2
+    klein = doek.resize((zijde_klein, zijde_klein), Image.LANCZOS)
+
+    doel = config.get("_image")
+    if doel is not None:
+        masker = klein.point(lambda p: 255 - p)
+        doel.paste(klein, (int(x), int(y)), masker)
+
+
 _RENDERERS: dict[WidgetType, RendererFn] = {
     WidgetType.TEXT: render_text,
     WidgetType.TEXT_MULTILINE: render_text_multiline,
@@ -1986,6 +2059,7 @@ _RENDERERS: dict[WidgetType, RendererFn] = {
     WidgetType.WASTE_SCHEDULE: render_waste_schedule,
     WidgetType.CHART: render_chart,
     WidgetType.CALENDAR: render_calendar,
+    WidgetType.CLOCK: render_clock,
 }
 
 
