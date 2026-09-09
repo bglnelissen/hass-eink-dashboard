@@ -447,7 +447,12 @@ class EinkDashboardCard extends HTMLElement {
     if (customElements.get("eink-dashboard-editor")) return;
     const script = document.createElement("script");
     script.type = "module";
-    script.src = "/eink_dashboard/frontend/eink-dashboard-editor.js";
+    // This card is loaded with ?v=<manifest version> so a new release busts
+    // the browser cache. The editor is pulled in by hand, so it has to carry
+    // the same query or a browser keeps serving an editor from before a new
+    // widget type existed: the widget draws, but its form comes up empty.
+    const version = new URL(import.meta.url).search;
+    script.src = `/eink_dashboard/frontend/eink-dashboard-editor.js${version}`;
     document.head.appendChild(script);
     await customElements.whenDefined("eink-dashboard-editor");
   }
