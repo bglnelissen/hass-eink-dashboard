@@ -1890,6 +1890,14 @@ def render_calendar(
         round(font_size * (0.65 if positie == "below_time" else 1.0)),
     )
     font_naam = _load_font(naam_grootte, font=widget.get("font", "roboto"))
+    # The calendar name is secondary to both the time and the summary, but at
+    # COLOR_GRAY it came out as flat light grey with no black in it at all: on
+    # a four-level panel everything above 87 lands on one tone. COLOR_DARK_GRAY
+    # is the first step that actually reads darker. It is the same tone as the
+    # time, and the difference with the next step up is 17 pixels on the whole
+    # screen, so a second constant for it would be a number nobody can see.
+    # The name stays lighter than the time through its smaller size.
+    naam_kleur = widget.get("calendar_color", COLOR_DARK_GRAY)
     naam_breedte = round(widget.get("calendar_width", font_size * 3.4))
     naam_tekens = widget.get("calendar_max_chars")
 
@@ -1948,19 +1956,19 @@ def render_calendar(
             draw.text(
                 (x, y + round(font_size * 0.82)),
                 _fit_text(draw, naam, font_naam, time_width - 4),
-                fill=COLOR_GRAY,
+                fill=naam_kleur,
                 font=font_naam,
             )
         elif naam and positie == "column":
             draw.text(
                 (tekst_x, y),
                 _fit_text(draw, naam, font_naam, naam_breedte - 6),
-                fill=COLOR_GRAY,
+                fill=naam_kleur,
                 font=font_naam,
             )
             tekst_x += naam_breedte
         elif naam:
-            draw.text((tekst_x, y), naam, fill=COLOR_GRAY, font=font_naam)
+            draw.text((tekst_x, y), naam, fill=naam_kleur, font=font_naam)
             tekst_x += round(draw.textlength(naam + " ", font=font_naam))
 
         _draw_rich_text(

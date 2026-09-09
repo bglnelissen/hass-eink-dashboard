@@ -2376,6 +2376,37 @@ class TestRenderCalendar:
         assert COLOR_BLACK in tonen
         assert COLOR_DARK_GRAY not in tonen
 
+    @staticmethod
+    def _naamvak(img: Image.Image) -> int:
+        """The darkest tone in the calendar name of the first event.
+
+        With calendar_position column the name sits in a fixed column of its
+        own, so the summary cannot bleed into the crop. The darkest tone is
+        the core of the glyphs, which is exactly the fill that was asked for;
+        everything lighter is antialiasing.
+        """
+        vak = img.crop((74, 36, 148, 58))
+        return min(v for v, n in enumerate(vak.histogram()) if n)
+
+    def test_calendar_name_is_drawn_dark_enough_to_read(self) -> None:
+        """At COLOR_GRAY it came out flat light grey on a 2-bit panel."""
+        img = self._render(
+            {"show_calendar": True, "calendar_position": "column"},
+            events=self._events(1),
+        )
+        assert self._naamvak(img) == COLOR_DARK_GRAY
+
+    def test_calendar_color_overrides_the_default(self) -> None:
+        img = self._render(
+            {
+                "show_calendar": True,
+                "calendar_position": "column",
+                "calendar_color": COLOR_BLACK,
+            },
+            events=self._events(1),
+        )
+        assert self._naamvak(img) == COLOR_BLACK
+
     def test_unparsable_events_are_skipped_not_fatal(self) -> None:
         kapot = [{"entity_id": "calendar.c0", "start": "", "summary": "x"}]
         assert_all_white(self._render(events=kapot), 0, 0, 400, 480)

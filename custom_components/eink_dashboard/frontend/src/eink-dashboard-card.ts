@@ -1714,7 +1714,7 @@ class EinkDashboardCard extends HTMLElement {
         }
         if (name) {
           ctx.font = `${nameSize}px ${FONT_FAMILY}`;
-          ctx.fillStyle = grayColor(COLOR_GRAY);
+          ctx.fillStyle = grayColor(widget.calendar_color ?? COLOR_DARK_GRAY);
           if (pos === "below_time") {
             ctx.fillText(name, x, y + Math.round(fontSize * 0.82));
           } else if (pos === "column") {
