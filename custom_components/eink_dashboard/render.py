@@ -72,6 +72,7 @@ _FONT_FILES: dict[str, str] = {
     "roboto_medium": "Roboto-Medium.ttf",
     "ibm_plex_mono": "IBMPlexMono-Regular.ttf",
     "noto_sans": "NotoSans-Regular.ttf",
+    "noto_emoji": "NotoEmoji-Regular.ttf",
 }
 
 
@@ -98,6 +99,88 @@ def _load_font_cached(
     if fallback.exists():
         return ImageFont.truetype(str(fallback), size)
     return ImageFont.load_default(size)
+
+
+# Codepoint ranges drawn with the emoji font instead of the text font.
+# Roboto and friends have no glyphs there, so without this they come out as
+# empty boxes ("tofu").
+_EMOJI_RANGES: tuple[tuple[int, int], ...] = (
+    (0x1F000, 0x1FAFF),  # pictographs, emoticons, transport, symbols A
+    (0x2600, 0x27BF),  # misc symbols and dingbats
+    (0x2B00, 0x2BFF),  # misc symbols and arrows
+)
+# Joiners and modifiers that belong to whichever run precedes them.
+_EMOJI_GLUE: frozenset[int] = frozenset({0x200D, 0xFE0E, 0xFE0F, 0x20E3})
+
+
+def _is_emoji(char: str) -> bool:
+    """Return True when the character needs the emoji font."""
+    code = ord(char)
+    return any(low <= code <= high for low, high in _EMOJI_RANGES)
+
+
+def _split_runs(text: str) -> list[tuple[str, bool]]:
+    """Split text into (chunk, is_emoji) runs for mixed-font drawing.
+
+    Zero-width joiners and variation selectors stick to the run before them
+    so emoji sequences such as a flag or a skin tone stay in one piece.
+    """
+    runs: list[tuple[str, bool]] = []
+    for char in text:
+        emoji = _is_emoji(char)
+        if runs and (ord(char) in _EMOJI_GLUE or runs[-1][1] == emoji):
+            runs[-1] = (runs[-1][0] + char, runs[-1][1])
+        else:
+            runs.append((char, emoji))
+    return runs
+
+
+def _rich_text_width(
+    draw: ImageDraw.ImageDraw,
+    text: str,
+    font: ImageFont.FreeTypeFont | ImageFont.ImageFont,
+    emoji_font: ImageFont.FreeTypeFont | ImageFont.ImageFont | None,
+) -> float:
+    """Width of text when emoji runs are drawn with the emoji font."""
+    if emoji_font is None:
+        return draw.textlength(text, font=font)
+    return sum(
+        draw.textlength(chunk, font=emoji_font if is_emoji else font)
+        for chunk, is_emoji in _split_runs(text)
+    )
+
+
+def _draw_rich_text(
+    draw: ImageDraw.ImageDraw,
+    xy: tuple[int, int],
+    text: str,
+    font: ImageFont.FreeTypeFont | ImageFont.ImageFont,
+    emoji_font: ImageFont.FreeTypeFont | ImageFont.ImageFont | None,
+    fill: int,
+) -> float:
+    """Draw text, switching to the emoji font for emoji runs.
+
+    Returns the total width drawn.
+    """
+    if emoji_font is None:
+        draw.text(xy, text, fill=fill, font=font)
+        return draw.textlength(text, font=font)
+
+    x, y = xy
+    for chunk, is_emoji in _split_runs(text):
+        chunk_font = emoji_font if is_emoji else font
+        draw.text((x, y), chunk, fill=fill, font=chunk_font)
+        x += draw.textlength(chunk, font=chunk_font)
+    return x - xy[0]
+
+
+def _emoji_font_for(
+    widget: Widget, size: int
+) -> ImageFont.FreeTypeFont | ImageFont.ImageFont | None:
+    """Emoji font at the given size, or None when the widget opts out."""
+    if widget.get("emoji", True) is False:
+        return None
+    return _load_font(size, font="noto_emoji")
 
 
 def _fmt_temp(value: str | float | int) -> str:
@@ -681,17 +764,17 @@ def render_text(
     align = widget.get("align", Align.LEFT)
 
     font = _load_font(font_size, font=widget.get("font", "roboto"))
+    emoji_font = _emoji_font_for(widget, font_size)
     right_edge = _compute_right_edge(x, widget, config["width"])
 
     if align in (Align.RIGHT, Align.CENTER):
-        bbox = draw.textbbox((0, 0), text, font=font)
-        text_w = bbox[2] - bbox[0]
+        text_w = _rich_text_width(draw, text, font, emoji_font)
         if align == Align.RIGHT:
-            x = right_edge - PADDING - text_w
+            x = round(right_edge - PADDING - text_w)
         else:
-            x = x + (right_edge - x - text_w) // 2
+            x = round(x + (right_edge - x - text_w) / 2)
 
-    draw.text((x, y), text, fill=color, font=font)
+    _draw_rich_text(draw, (x, y), text, font, emoji_font, color)
 
 
 def render_text_multiline(
@@ -710,14 +793,14 @@ def render_text_multiline(
     line_height = int(widget.get("line_height", font_size + 6))
 
     font = _load_font(font_size, font=widget.get("font", "roboto"))
+    emoji_font = _emoji_font_for(widget, font_size)
 
     words = text.split()
     lines: list[str] = []
     current = ""
     for word in words:
         candidate = (current + " " + word).strip()
-        bbox = draw.textbbox((0, 0), candidate, font=font)
-        if bbox[2] - bbox[0] <= max_width:
+        if _rich_text_width(draw, candidate, font, emoji_font) <= max_width:
             current = candidate
         else:
             if current:
@@ -728,7 +811,7 @@ def render_text_multiline(
 
     cur_y = y
     for line in lines:
-        draw.text((x, cur_y), line, fill=color, font=font)
+        _draw_rich_text(draw, (x, cur_y), line, font, emoji_font, color)
         cur_y += line_height
 
 
@@ -1733,12 +1816,15 @@ def _fit_text(
     text: str,
     font: ImageFont.FreeTypeFont | ImageFont.ImageFont,
     max_width: int,
+    emoji_font: ImageFont.FreeTypeFont | ImageFont.ImageFont | None = None,
 ) -> str:
     """Shorten text with an ellipsis until it fits within max_width."""
-    if draw.textlength(text, font=font) <= max_width:
+    if _rich_text_width(draw, text, font, emoji_font) <= max_width:
         return text
     kort = text
-    while kort and draw.textlength(kort + "\u2026", font=font) > max_width:
+    while kort and (
+        _rich_text_width(draw, kort + "\u2026", font, emoji_font) > max_width
+    ):
         kort = kort[:-1]
     return (kort.rstrip() + "\u2026") if kort else ""
 
@@ -1766,6 +1852,7 @@ def render_calendar(
         round(font_size * 0.8), font=widget.get("font", "roboto_medium")
     )
     font_title = _load_font(round(26 * s), font="roboto_medium")
+    emoji_font = _emoji_font_for(widget, font_size)
 
     row_height = round(widget.get("row_height", font_size + 8))
     day_gap = round(font_size * 0.9)
@@ -1824,16 +1911,19 @@ def render_calendar(
         if tijdstip:
             draw.text((x, y), tijdstip, fill=COLOR_GRAY, font=font_row)
         tekst_x = x + time_width
-        draw.text(
+        _draw_rich_text(
+            draw,
             (tekst_x, y),
             _fit_text(
                 draw,
                 str(event.get("summary") or ""),
                 font_row,
                 right_edge - tekst_x,
+                emoji_font,
             ),
-            fill=COLOR_BLACK,
-            font=font_row,
+            font_row,
+            emoji_font,
+            COLOR_BLACK,
         )
         y += row_height
         getekend += 1

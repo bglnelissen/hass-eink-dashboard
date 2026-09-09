@@ -23,9 +23,11 @@ from custom_components.eink_dashboard.render import (
     _draw_chip_flow,
     _fit_text,
     _format_relative_date,
+    _is_emoji,
     _load_font,
     _parse_days_until,
     _parse_event_start,
+    _split_runs,
     render_dashboard,
 )
 from tests.helpers import (
@@ -2264,3 +2266,80 @@ class TestRenderCalendar:
         img = self._render({"max_events": 50}, events=self._events(50))
         onderste_rij = [img.getpixel((x, 479)) for x in range(400)]
         assert all(p == 255 for p in onderste_rij)
+
+
+class TestEmojiFallback:
+    """Emoji are drawn with Noto Emoji instead of coming out as tofu."""
+
+    @pytest.mark.parametrize(
+        "char", ["\U0001f3d1", "\U0001f487", "\u26f3", "\U0001f5d1"]
+    )
+    def test_pictographs_are_emoji(self, char: str) -> None:
+        assert _is_emoji(char)
+
+    @pytest.mark.parametrize("char", ["a", "1", " ", "\u00e9", "-", "\u20ac"])
+    def test_plain_text_is_not_emoji(self, char: str) -> None:
+        assert not _is_emoji(char)
+
+    def test_runs_split_on_the_boundary(self) -> None:
+        assert _split_runs("hockey \U0001f3d1 nu") == [
+            ("hockey ", False),
+            ("\U0001f3d1", True),
+            (" nu", False),
+        ]
+
+    def test_variation_selector_stays_with_its_emoji(self) -> None:
+        """A trailing U+FE0F must not start a text run of its own."""
+        runs = _split_runs("\U0001f3d5\ufe0f kamp")
+        assert runs[0] == ("\U0001f3d5\ufe0f", True)
+        assert runs[1] == (" kamp", False)
+
+    def test_text_without_emoji_is_one_run(self) -> None:
+        assert _split_runs("gewone tekst") == [("gewone tekst", False)]
+
+    def test_empty_text_has_no_runs(self) -> None:
+        assert _split_runs("") == []
+
+    def test_emoji_actually_draws_ink(self) -> None:
+        """Without the fallback font this would be an empty box or nothing."""
+        png = render_dashboard(
+            [
+                {
+                    "type": "text",
+                    "x": 5,
+                    "y": 5,
+                    "text": "\U0001f3d1",
+                    "font_size": 30,
+                }
+            ],
+            {"width": 80, "height": 50},
+        )
+        assert_has_dark_pixels(png_to_image(png), 0, 0, 80, 50)
+
+    def test_emoji_can_be_switched_off_per_widget(self) -> None:
+        met = render_dashboard(
+            [
+                {
+                    "type": "text",
+                    "x": 5,
+                    "y": 5,
+                    "text": "\U0001f3d1",
+                    "font_size": 30,
+                }
+            ],
+            {"width": 80, "height": 50},
+        )
+        zonder = render_dashboard(
+            [
+                {
+                    "type": "text",
+                    "x": 5,
+                    "y": 5,
+                    "text": "\U0001f3d1",
+                    "font_size": 30,
+                    "emoji": False,
+                }
+            ],
+            {"width": 80, "height": 50},
+        )
+        assert met != zonder

@@ -3,7 +3,7 @@
 #
 # What this script does:
 #   1. Generate weather icon PNGs from SVG sources (requires cairosvg)
-#   2. Download Roboto-Regular.ttf (Apache 2.0) into the component's fonts/ dir
+#   2. Download the text fonts plus Noto Emoji into the component's fonts/ dir
 #   3. Package custom_components/eink_dashboard/ into dist/eink_dashboard-<version>.tar.gz
 #   4. Optionally produce dist/eink_dashboard.zip for HACS zip_release
 #   5. Clean up generated icons and font from the working tree
@@ -40,6 +40,8 @@ ROBOTO_URL="https://github.com/googlefonts/roboto/raw/main/src/hinted/Roboto-Reg
 ROBOTO_MEDIUM_URL="https://github.com/googlefonts/roboto/raw/main/src/hinted/Roboto-Medium.ttf"
 IBM_PLEX_MONO_URL="https://github.com/IBM/plex/raw/master/packages/plex-mono/fonts/complete/ttf/IBMPlexMono-Regular.ttf"
 NOTO_SANS_URL="https://github.com/googlefonts/noto-fonts/raw/main/hinted/ttf/NotoSans/NotoSans-Regular.ttf"
+# Monochrome emoji, used as a fallback for characters the text fonts lack.
+NOTO_EMOJI_URL="https://github.com/google/fonts/raw/main/ofl/notoemoji/NotoEmoji%5Bwght%5D.ttf"
 
 cleanup() {
     echo "Cleaning up generated assets..."
@@ -82,6 +84,13 @@ if [ -f "${FONTS_DIR}/NotoSans-Regular.ttf" ]; then
 else
     echo "==> Downloading NotoSans-Regular.ttf (SIL Open Font License)..."
     curl -fsSL "${NOTO_SANS_URL}" -o "${FONTS_DIR}/NotoSans-Regular.ttf"
+fi
+
+if [ -f "${FONTS_DIR}/NotoEmoji-Regular.ttf" ]; then
+    echo "==> NotoEmoji-Regular.ttf already exists, skipping download"
+else
+    echo "==> Downloading NotoEmoji-Regular.ttf (SIL Open Font License)..."
+    curl -fsSL "${NOTO_EMOJI_URL}" -o "${FONTS_DIR}/NotoEmoji-Regular.ttf"
 fi
 
 mkdir -p "${DIST_DIR}"
