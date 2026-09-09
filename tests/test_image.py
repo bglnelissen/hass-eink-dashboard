@@ -328,6 +328,36 @@ class TestEinkDashboardImage:
         )
         assert has_dark
 
+    async def test_template_in_text_multiline_widget_is_resolved(self) -> None:
+        """Multiline text widgets render templates too, not just text ones."""
+        hass = _make_hass()
+        entry = _make_entry()
+        entity = EinkDashboardImage(hass, entry)
+        entity.async_write_ha_state = MagicMock()
+        entity.set_widgets(
+            [
+                {
+                    "type": "text_multiline",
+                    "x": 10,
+                    "y": 10,
+                    "text": "Lichten: {{ states('sensor.lights_on') }}",
+                    "font_size": 20,
+                }
+            ]
+        )
+
+        with patch(
+            "custom_components.eink_dashboard.image.Template"
+        ) as MockTemplate:
+            instance = MockTemplate.return_value
+            instance.is_static = False
+            instance.async_render.return_value = "Lichten: Keuken, Hal"
+            await entity._async_refresh(None)
+            MockTemplate.assert_called_once_with(
+                "Lichten: {{ states('sensor.lights_on') }}", hass
+            )
+            instance.async_render.assert_called_once_with(parse_result=False)
+
     async def test_static_text_skips_template_render(self) -> None:
         hass = _make_hass()
         entry = _make_entry()

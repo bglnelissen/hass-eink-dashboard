@@ -160,7 +160,7 @@ class EinkDashboardImage(ImageEntity):
         for widget in widgets:
             widget_type = widget.get("type")
             fields = []
-            if widget_type == WidgetType.TEXT:
+            if widget_type in (WidgetType.TEXT, WidgetType.TEXT_MULTILINE):
                 fields = ["text"]
             elif widget_type == WidgetType.CHART:
                 fields = ["title", "xlabel", "ylabel"]
