@@ -190,6 +190,7 @@ export interface CalendarWidget extends WidgetBase {
   days?: number;
   max_events?: number;
   row_height?: number;
+  time_color?: number;
   show_calendar?: boolean;
   calendar_position?: "inline" | "column" | "below_time";
   calendar_font_size?: number;

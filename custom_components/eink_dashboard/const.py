@@ -21,6 +21,13 @@ COLOR_BLACK = 0
 COLOR_WHITE = 255
 COLOR_GRAY = 120
 COLOR_LIGHT_GRAY = 180
+# A four-level panel has no tone between COLOR_GRAY and black: everything from
+# roughly 95 to 140 quantizes onto the same grey. Below that the dithering
+# starts mixing black pixels in, which is the only way to get darker without
+# going all the way to black. At 84 about a fifth of the ink turns black, dark
+# enough to read as heavier while the digits still look solid rather than
+# speckled. Measured on the 800x480 TRMNL at 2-bit.
+COLOR_DARK_GRAY = 84
 
 FONT_SIZE_TEXT = 32
 FONT_SIZE_WEATHER = 32

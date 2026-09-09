@@ -10,6 +10,7 @@ from PIL import Image, ImageDraw, ImageFont
 
 from custom_components.eink_dashboard.const import (
     COLOR_BLACK,
+    COLOR_DARK_GRAY,
     COLOR_GRAY,
     PADDING,
 )
@@ -2348,6 +2349,32 @@ class TestRenderCalendar:
         )
         # Meer inkt op de regel betekent dat er meer van de titel past.
         assert self._inkt(onder) > self._inkt(inline)
+
+    @staticmethod
+    def _tijdvak(img: Image.Image) -> set[int]:
+        """The tones used in the time of the first event.
+
+        With the default font size the time column is 64 wide and the day
+        heading sits above it, so the digits land between y 36 and y 58.
+        """
+        return {
+            v
+            for v, n in enumerate(img.crop((10, 36, 74, 58)).histogram())
+            if n
+        }
+
+    def test_time_is_drawn_darker_than_the_calendar_name(self) -> None:
+        """The time carries the row, so it gets its own darker tone."""
+        img = self._render({"show_calendar": True}, events=self._events(1))
+        assert COLOR_DARK_GRAY in self._tijdvak(img)
+        assert COLOR_GRAY not in self._tijdvak(img)
+
+    def test_time_color_overrides_the_default(self) -> None:
+        """How dark that lands depends on the panel, so it is settable."""
+        img = self._render({"time_color": COLOR_BLACK}, events=self._events(1))
+        tonen = self._tijdvak(img)
+        assert COLOR_BLACK in tonen
+        assert COLOR_DARK_GRAY not in tonen
 
     def test_unparsable_events_are_skipped_not_fatal(self) -> None:
         kapot = [{"entity_id": "calendar.c0", "start": "", "summary": "x"}]

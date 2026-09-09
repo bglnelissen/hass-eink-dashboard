@@ -235,6 +235,7 @@ export const SCHEMAS = {
             type: "grid", name: "", schema: [
                 { name: "calendar_font_size", selector: { number: { min: 8, max: 40, mode: "box" } } },
                 { name: "calendar_max_chars", selector: { number: { min: 1, max: 30, mode: "box" } } },
+                { name: "time_color", selector: { number: { min: 0, max: 255, mode: "box" } } },
                 { name: "calendar_width", selector: { number: { min: 10, max: 200, mode: "box" } } },
             ],
         },
@@ -298,6 +299,7 @@ export const LABELS = {
     calendar_position: "Name position",
     calendar_font_size: "Name font size",
     calendar_max_chars: "Name max characters",
+    time_color: "Time shade (0 black, 255 white)",
     calendar_width: "Name column width",
     radius: "Radius",
     circle_width: "Circle thickness",

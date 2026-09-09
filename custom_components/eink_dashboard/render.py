@@ -16,6 +16,7 @@ from PIL import Image, ImageDraw, ImageFont, ImageOps
 
 from .const import (
     COLOR_BLACK,
+    COLOR_DARK_GRAY,
     COLOR_GRAY,
     COLOR_LIGHT_GRAY,
     COLOR_WHITE,
@@ -1876,6 +1877,12 @@ def render_calendar(
     today_label = widget.get("today_label") or DEFAULT_TODAY_LABEL
     tomorrow_label = widget.get("tomorrow_label") or DEFAULT_TOMORROW_LABEL
 
+    # The time is the one thing on a row you read before anything else, so it
+    # gets its own tone: darker than the calendar name, lighter than the
+    # summary. Overridable per widget, because how dark that lands depends on
+    # how many grey levels the panel has.
+    tijd_kleur = widget.get("time_color", COLOR_DARK_GRAY)
+
     show_calendar = widget.get("show_calendar", False)
     positie = widget.get("calendar_position", "inline")
     naam_grootte = widget.get(
@@ -1927,7 +1934,7 @@ def render_calendar(
             break
 
         if tijdstip:
-            draw.text((x, y), tijdstip, fill=COLOR_GRAY, font=font_row)
+            draw.text((x, y), tijdstip, fill=tijd_kleur, font=font_row)
         tekst_x = x + time_width
 
         samenvatting = str(event.get("summary") or "")

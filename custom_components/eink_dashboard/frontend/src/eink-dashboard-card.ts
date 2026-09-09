@@ -35,6 +35,9 @@ const PADDING = 24;
 const COLOR_BLACK = 0;
 const COLOR_WHITE = 255;
 const COLOR_GRAY = 120;
+// Mirrors COLOR_DARK_GRAY in const.py: on a four-level panel this is the
+// darkest step below COLOR_GRAY that still reads as a tone, not as speckle.
+const COLOR_DARK_GRAY = 84;
 const COLOR_LIGHT_GRAY = 180;
 const FONT_FAMILY = "Roboto, sans-serif";
 const ROBOTO_URL = "/eink_dashboard/fonts/Roboto-Regular.ttf";
@@ -1691,7 +1694,7 @@ class EinkDashboardCard extends HTMLElement {
 
       ctx.font = `${fontSize}px ${FONT_FAMILY}`;
       if (time) {
-        ctx.fillStyle = grayColor(COLOR_GRAY);
+        ctx.fillStyle = grayColor(widget.time_color ?? COLOR_DARK_GRAY);
         ctx.fillText(time, x, y);
       }
       let textX = x + timeW;
