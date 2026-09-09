@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import dataclasses
 import datetime as dt
+import io
 from unittest.mock import patch
 
 import pytest
@@ -2038,3 +2039,75 @@ class TestDrawChipFlow:
         assert pixel(img, self._X + 4, mid_y) == COLOR_BLACK, (
             "inverted chip in flow should have black fill"
         )
+
+
+class TestChartAxisOverrides:
+    """y_min / y_max let a widget pin the left axis instead of
+    auto-scaling to the data range.
+    """
+
+    @staticmethod
+    def _config(**extra):
+        """Display config with one flat series at value 50."""
+        base = 1_700_000_000.0
+        points = [{"t": base + i * 3600, "v": 50.0} for i in range(6)]
+        return {
+            "width": 400,
+            "height": 240,
+            "histories": {"sensor.demo": points},
+            **extra,
+        }
+
+    @staticmethod
+    def _widget(**extra):
+        return {
+            "type": "chart",
+            "x": 0,
+            "y": 0,
+            "w": 400,
+            "h": 240,
+            "config": {"series": [{"entity": "sensor.demo"}]},
+            **extra,
+        }
+
+    def test_override_changes_the_rendering(self) -> None:
+        zonder = render_dashboard([self._widget()], self._config())
+        met = render_dashboard(
+            [self._widget(y_min=0, y_max=200)], self._config()
+        )
+        assert zonder != met
+
+    @staticmethod
+    def _lijn_rij(png: bytes) -> int:
+        """Row index of the flat data line: the row with the most dark
+        pixels, ignoring the bottom strip that holds the axis labels.
+        """
+        img = Image.open(io.BytesIO(png)).convert("L")
+        beste, beste_aantal = 0, -1
+        for y in range(img.height - 60):
+            aantal = sum(
+                1 for x in range(img.width) if img.getpixel((x, y)) < 128
+            )
+            if aantal > beste_aantal:
+                beste, beste_aantal = y, aantal
+        assert beste_aantal > 0, "de grafiek tekende niets"
+        return beste
+
+    def test_larger_y_max_pushes_the_line_down(self) -> None:
+        """A flat line at 50 sits lower as the axis maximum grows,
+        because the same value maps further down a taller range.
+        """
+        krap = render_dashboard(
+            [self._widget(y_min=0, y_max=100)], self._config()
+        )
+        ruim = render_dashboard(
+            [self._widget(y_min=0, y_max=1000)], self._config()
+        )
+        assert self._lijn_rij(ruim) > self._lijn_rij(krap)
+
+    def test_only_y_max_is_honoured(self) -> None:
+        alleen_max = render_dashboard(
+            [self._widget(y_max=500)], self._config()
+        )
+        zonder = render_dashboard([self._widget()], self._config())
+        assert alleen_max != zonder

@@ -1477,6 +1477,18 @@ def render_chart(  # noqa: C901
     left_scale = _axis_scale(False)
     right_scale = _axis_scale(True) if has_right else None
 
+    # Widget-level y_min / y_max overrides for the left axis.
+    y_min_override = widget.get("y_min")
+    y_max_override = widget.get("y_max")
+    has_override = y_min_override is not None or y_max_override is not None
+    if left_scale is not None and has_override:
+        lo, hi = left_scale
+        if y_min_override is not None:
+            lo = float(y_min_override)
+        if y_max_override is not None:
+            hi = float(y_max_override)
+        left_scale = (lo, hi)
+
     all_times = [
         p["t"]
         for s in visible

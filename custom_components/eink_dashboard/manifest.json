@@ -1,11 +1,13 @@
 {
   "domain": "eink_dashboard",
   "name": "E-Ink Dashboard",
-  "codeowners": ["@bglnelissen"],
+  "codeowners": [
+    "@bglnelissen"
+  ],
   "config_flow": true,
   "documentation": "https://github.com/bglnelissen/hass-eink-dashboard",
   "iot_class": "local_polling",
   "issue_tracker": "https://github.com/bglnelissen/hass-eink-dashboard/issues",
   "requirements": [],
-  "version": "0.1.0"
+  "version": "0.1.12"
 }

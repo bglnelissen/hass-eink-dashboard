@@ -234,6 +234,10 @@ export const SCHEMAS: Record<string, (d: DisplayConfig) => HaFormSchema[]> = {
       { name: "ylabel", selector: { text: {} } },
       { name: "xlabel", selector: { text: {} } },
     ]},
+    { type: "grid", name: "", schema: [
+      { name: "y_min", selector: { number: { mode: "box", step: 1 } } },
+      { name: "y_max", selector: { number: { mode: "box", step: 1 } } },
+    ]},
     { name: "label_font_size", default: 18, selector: { number: { min: 8, max: 48, mode: "box" } } },
     { name: "legend", default: "none", selector: { select: {
       options: [
@@ -266,6 +270,8 @@ export const LABELS: Record<string, string> = {
   legend: "Legend",
   title_font_size: "Title font size",
   label_font_size: "Axis label font size",
+  y_min: "Y-axis min",
+  y_max: "Y-axis max",
 };
 
 // ── HA component loader ──────────────────────────────────────────────────────
