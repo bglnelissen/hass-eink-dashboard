@@ -1,6 +1,7 @@
 """Constants, enums, and device presets for the e-ink dashboard."""
 
 from dataclasses import dataclass
+from datetime import timedelta
 from enum import StrEnum
 
 DOMAIN = "eink_dashboard"
@@ -199,3 +200,11 @@ DEFAULT_MONTH_NAMES = [
 ]
 DEFAULT_TODAY_LABEL = "Today"
 DEFAULT_TOMORROW_LABEL = "Tomorrow"
+# Word before the end time on the last day of a long event, as in
+# "Weekend away until 16:00". Override per widget with until_label.
+DEFAULT_UNTIL_LABEL = "until"
+# An event that runs past midnight but lasts no longer than this, like a
+# night shift from 22:00 to 08:00, only shows on the day it starts: once it
+# has started there is nothing new to read the next morning. A longer one,
+# like a weekend away, also shows on the day it ends, with its end time.
+CALENDAR_LONG_EVENT = timedelta(hours=24)

@@ -16,6 +16,7 @@ from custom_components.eink_dashboard.const import (
 )
 from custom_components.eink_dashboard.render import (
     WidgetMetrics,
+    _calendar_rows,
     _compute_metrics,
     _day_heading,
     _draw_card_container,
@@ -23,6 +24,7 @@ from custom_components.eink_dashboard.render import (
     _draw_chip,
     _draw_chip_flow,
     _fit_text,
+    _fit_text_with_suffix,
     _format_relative_date,
     _is_emoji,
     _load_font,
@@ -2433,6 +2435,167 @@ class TestRenderCalendar:
         img = self._render({"max_events": 50}, events=self._events(50))
         onderste_rij = [img.getpixel((x, 479)) for x in range(400)]
         assert all(p == 255 for p in onderste_rij)
+
+    def test_until_label_is_drawn_on_the_last_day(self) -> None:
+        """A weekend away that ends today shows its end time today."""
+        vandaag = dt.date.today()
+        events = [
+            {
+                "entity_id": "calendar.c0",
+                "calendar": "C0",
+                "start": f"{vandaag - dt.timedelta(days=2)}T18:00:00",
+                "end": f"{vandaag}T16:00:00",
+                "summary": "Weekend",
+            }
+        ]
+        engels = self._render(events=events)
+        nederlands = self._render({"until_label": "tot"}, events=events)
+        assert_has_dark_pixels(engels, 0, 0, 400, 480)
+        # "until" and "tot" leave a different amount of ink.
+        assert self._inkt(engels) != self._inkt(nederlands)
+
+
+class TestCalendarRows:
+    """Which days an event shows on, and with which time."""
+
+    VR = dt.date(2026, 9, 11)  # a Friday
+    ZA = dt.date(2026, 9, 12)
+    ZO = dt.date(2026, 9, 13)
+
+    @staticmethod
+    def _event(start: str, end: str, summary: str = "x") -> dict:
+        return {
+            "entity_id": "calendar.c0",
+            "calendar": "C0",
+            "start": start,
+            "end": end,
+            "summary": summary,
+        }
+
+    @staticmethod
+    def _rows(
+        events: list[dict], first_day: dt.date, days: int = 14
+    ) -> list[tuple]:
+        last_day = first_day + dt.timedelta(days=days)
+        return [
+            (r.day, r.time, r.until)
+            for r in _calendar_rows(events, first_day, last_day)
+        ]
+
+    def test_event_within_one_day_is_one_row(self) -> None:
+        e = self._event(
+            "2026-09-11T08:30:00+02:00", "2026-09-11T09:30:00+02:00"
+        )
+        assert self._rows([e], self.VR) == [(self.VR, "08:30", "")]
+
+    def test_all_day_event_shows_on_every_day(self) -> None:
+        """A five-day course is there each day, not only on the first."""
+        e = self._event("2026-09-27", "2026-10-02")  # end is exclusive
+        rows = self._rows([e], dt.date(2026, 9, 27))
+        assert [r[0].day for r in rows] == [27, 28, 29, 30, 1]
+        assert all(r[1] == "" and r[2] == "" for r in rows)
+
+    def test_event_that_started_earlier_shows_under_today(self) -> None:
+        """Not under a heading with a date that has already passed."""
+        e = self._event("2026-09-07", "2026-09-13")
+        assert self._rows([e], self.VR) == [
+            (self.VR, "", ""),
+            (self.ZA, "", ""),
+        ]
+
+    def test_night_shift_only_shows_on_the_evening_it_starts(self) -> None:
+        e = self._event(
+            "2026-09-11T22:00:00+02:00", "2026-09-12T08:00:00+02:00"
+        )
+        assert self._rows([e], self.VR) == [(self.VR, "22:00", "")]
+
+    def test_night_shift_is_gone_after_midnight(self) -> None:
+        """It has started, so the next morning there is nothing to show."""
+        e = self._event(
+            "2026-09-10T22:00:00+02:00", "2026-09-11T08:00:00+02:00"
+        )
+        assert self._rows([e], self.VR) == []
+
+    def test_weekend_away_shows_its_end_time_on_the_last_day(self) -> None:
+        e = self._event(
+            "2026-09-11T18:00:00+02:00", "2026-09-13T16:00:00+02:00"
+        )
+        assert self._rows([e], self.VR) == [
+            (self.VR, "18:00", ""),
+            (self.ZA, "", ""),
+            (self.ZO, "", "16:00"),
+        ]
+
+    def test_weekend_away_that_started_yesterday(self) -> None:
+        e = self._event(
+            "2026-09-11T18:00:00+02:00", "2026-09-13T16:00:00+02:00"
+        )
+        assert self._rows([e], self.ZA) == [
+            (self.ZA, "", ""),
+            (self.ZO, "", "16:00"),
+        ]
+
+    def test_exactly_24_hours_is_not_long(self) -> None:
+        e = self._event(
+            "2026-09-11T12:00:00+02:00", "2026-09-12T12:00:00+02:00"
+        )
+        assert self._rows([e], self.VR) == [(self.VR, "12:00", "")]
+
+    def test_long_event_ending_at_midnight_has_no_extra_day(self) -> None:
+        e = self._event(
+            "2026-09-11T18:00:00+02:00", "2026-09-13T00:00:00+02:00"
+        )
+        assert self._rows([e], self.VR) == [
+            (self.VR, "18:00", ""),
+            (self.ZA, "", ""),
+        ]
+
+    def test_days_after_the_window_are_dropped(self) -> None:
+        e = self._event("2026-09-11", "2026-09-30")
+        rows = self._rows([e], self.VR, days=2)
+        assert [r[0] for r in rows] == [self.VR, self.ZA, self.ZO]
+
+    def test_event_without_an_end_shows_on_its_first_day(self) -> None:
+        e = {"start": "2026-09-11T09:00:00", "summary": "x"}
+        assert self._rows([e], self.VR) == [(self.VR, "09:00", "")]
+
+    def test_rows_without_a_time_come_first_then_by_time(self) -> None:
+        events = [
+            self._event(
+                "2026-09-11T18:00:00+02:00",
+                "2026-09-11T19:00:00+02:00",
+                "Avond",
+            ),
+            self._event(
+                "2026-09-11T08:30:00+02:00",
+                "2026-09-11T09:30:00+02:00",
+                "Hockey",
+            ),
+            self._event("2026-09-11", "2026-09-12", "Studiedag"),
+        ]
+        rows = _calendar_rows(events, self.VR, self.VR)
+        assert [r.event["summary"] for r in rows] == [
+            "Studiedag",
+            "Hockey",
+            "Avond",
+        ]
+
+    def test_suffix_survives_when_the_summary_is_too_long(self) -> None:
+        font = _load_font(20)
+        draw = ImageDraw.Draw(Image.new("L", (400, 50), 255))
+        tekst = _fit_text_with_suffix(
+            draw, "a very long weekend away", " until 16:00", font, 200
+        )
+        assert tekst.endswith("… until 16:00")
+        assert draw.textlength(tekst, font=font) <= 200
+
+    def test_short_summary_keeps_its_suffix_as_is(self) -> None:
+        font = _load_font(20)
+        draw = ImageDraw.Draw(Image.new("L", (400, 50), 255))
+        tekst = _fit_text_with_suffix(
+            draw, "Weekend", " until 16:00", font, 300
+        )
+        assert tekst == "Weekend until 16:00"
 
 
 class TestEmojiFallback:

@@ -15,16 +15,19 @@ from typing import Any, NamedTuple
 from PIL import Image, ImageDraw, ImageFont, ImageOps
 
 from .const import (
+    CALENDAR_LONG_EVENT,
     COLOR_BLACK,
     COLOR_DARK_GRAY,
     COLOR_GRAY,
     COLOR_LIGHT_GRAY,
     COLOR_WHITE,
+    DEFAULT_CALENDAR_DAYS,
     DEFAULT_CALENDAR_MAX_EVENTS,
     DEFAULT_DAY_NAMES,
     DEFAULT_MONTH_NAMES,
     DEFAULT_TODAY_LABEL,
     DEFAULT_TOMORROW_LABEL,
+    DEFAULT_UNTIL_LABEL,
     FONT_SIZE_CALENDAR,
     FONT_SIZE_DEVICE_BATTERY,
     FONT_SIZE_SENSOR_ROWS,
@@ -1795,6 +1798,84 @@ def _parse_event_start(raw: str) -> tuple[date, str] | None:
     return moment.date(), moment.strftime("%H:%M")
 
 
+def _wall_clock(raw: str) -> datetime | None:
+    """Turn an event start or end into local clock time, without a zone.
+
+    Home Assistant hands out timed events in local time already, so dropping
+    the offset keeps the hour you see in the calendar app. A bare date, as
+    all-day events have, becomes midnight at the start of that day.
+    """
+    try:
+        if len(raw) == 10:
+            return datetime.combine(
+                date.fromisoformat(raw), datetime.min.time()
+            )
+        return datetime.fromisoformat(raw).replace(tzinfo=None)
+    except ValueError:
+        return None
+
+
+class _CalendarRow(NamedTuple):
+    """One line of the calendar widget: an event as it shows on one day."""
+
+    day: date
+    time: str  # start time on the day the event starts, otherwise empty
+    until: str  # end time on the last day of a long event, otherwise empty
+    event: dict[str, Any]
+
+
+def _calendar_rows(
+    events: list[dict[str, Any]], first_day: date, last_day: date
+) -> list[_CalendarRow]:
+    """Turn events into rows, one for every day an event shows on.
+
+    An event shows on:
+    - the day it starts, with its start time (none for an all-day event);
+    - every later day it fills from midnight to midnight, without a time, so
+      a holiday is there on each day and not only on the first;
+    - the day it ends, if it lasts longer than CALENDAR_LONG_EVENT and ends
+      partway through that day, with the end time in `until`. A night shift
+      from 22:00 to 08:00 is shorter, so it only shows on the evening it
+      starts.
+
+    Only days from first_day to last_day are kept. An event that started
+    before today therefore shows under today, not under a date in the past.
+
+    Within a day, rows without a time come first, then the rest by time.
+    """
+    rows: list[_CalendarRow] = []
+    for event in events:
+        begin_raw = str(event.get("start") or "")
+        gesplitst = _parse_event_start(begin_raw)
+        begin = _wall_clock(begin_raw)
+        if gesplitst is None or begin is None:
+            continue
+        begin_dag, begin_tijd = gesplitst
+        # Without a usable end, show the event on its first day only. An
+        # all-day end is exclusive: an event on the 10th ends on the 11th.
+        einde = _wall_clock(str(event.get("end") or "")) or begin
+        lang = einde - begin > CALENDAR_LONG_EVENT
+
+        dag = max(first_day, begin_dag)
+        while dag <= last_day:
+            middernacht = datetime.combine(dag, datetime.min.time())
+            if dag == begin_dag:
+                rows.append(_CalendarRow(dag, begin_tijd, "", event))
+            elif einde >= middernacht + timedelta(days=1):
+                rows.append(_CalendarRow(dag, "", "", event))
+            elif lang and einde > middernacht:
+                tot = einde.strftime("%H:%M")
+                rows.append(_CalendarRow(dag, "", tot, event))
+            else:
+                break  # the event is over, no later day can show it
+            dag += timedelta(days=1)
+
+    # sort() keeps the order of equal keys, so rows without a time stay in
+    # the order the events started.
+    rows.sort(key=lambda r: (r.day, r.time != "", r.time))
+    return rows
+
+
 def _day_heading(
     day: date,
     today: date,
@@ -1830,6 +1911,25 @@ def _fit_text(
     return (kort.rstrip() + "\u2026") if kort else ""
 
 
+def _fit_text_with_suffix(
+    draw: ImageDraw.ImageDraw,
+    text: str,
+    suffix: str,
+    font: ImageFont.FreeTypeFont | ImageFont.ImageFont,
+    max_width: int,
+    emoji_font: ImageFont.FreeTypeFont | ImageFont.ImageFont | None = None,
+) -> str:
+    """Like _fit_text, but the suffix always stays whole.
+
+    Used for " until 16:00" on the last day of a long event: when the line
+    is too long, the summary gets shortened, never the end time.
+    """
+    if not suffix:
+        return _fit_text(draw, text, font, max_width, emoji_font)
+    ruimte = max_width - _rich_text_width(draw, suffix, font, emoji_font)
+    return _fit_text(draw, text, font, int(ruimte), emoji_font) + suffix
+
+
 def render_calendar(
     draw: ImageDraw.ImageDraw,
     widget: Widget,
@@ -1841,10 +1941,11 @@ def render_calendar(
     fetched through the calendar.get_events service. Set the entities field
     to show only some of the calendars that were fetched.
 
+    An event spread over several days gets a row on each day, see
+    _calendar_rows for which days and with which time.
+
     With show_calendar the calendar name is drawn before the summary, so a
-    shift called "Avond" reads as "Bas Avond". The name is skipped when the
-    summary already starts with it, which avoids "Guust Guust hockeytraining"
-    for events people name after themselves.
+    shift called "Avond" reads as "Bas Avond".
     """
     x = widget.get("x", PADDING)
     y = widget.get("y", 0)
@@ -1876,6 +1977,7 @@ def render_calendar(
     month_names = widget.get("month_names") or DEFAULT_MONTH_NAMES
     today_label = widget.get("today_label") or DEFAULT_TODAY_LABEL
     tomorrow_label = widget.get("tomorrow_label") or DEFAULT_TOMORROW_LABEL
+    until_label = widget.get("until_label") or DEFAULT_UNTIL_LABEL
 
     # The time is the one thing on a row you read before anything else, so it
     # gets its own tone: darker than the calendar name, lighter than the
@@ -1902,17 +2004,16 @@ def render_calendar(
     naam_tekens = widget.get("calendar_max_chars")
 
     today = date.today()
+    last_day = today + timedelta(
+        days=int(widget.get("days", DEFAULT_CALENDAR_DAYS))
+    )
     bottom = config.get("height", 0)
     huidige_dag: date | None = None
-    getekend = 0
 
-    for event in events:
-        if getekend >= max_events:
-            break
-        gesplitst = _parse_event_start(event.get("start", ""))
-        if gesplitst is None:
-            continue
-        dag, tijdstip = gesplitst
+    rijen = _calendar_rows(events, today, last_day)
+    for rij in rijen[:max_events]:
+        event = rij.event
+        dag, tijdstip = rij.day, rij.time
 
         if dag != huidige_dag:
             if huidige_dag is not None:
@@ -1971,12 +2072,17 @@ def render_calendar(
             draw.text((tekst_x, y), naam, fill=naam_kleur, font=font_naam)
             tekst_x += round(draw.textlength(naam + " ", font=font_naam))
 
+        # On the last day of a long event the end time goes after the
+        # summary, not in the time column: that column only holds start
+        # times, and "until 16:00" would not fit in it anyway.
+        achter = f" {until_label} {rij.until}" if rij.until else ""
         _draw_rich_text(
             draw,
             (tekst_x, y),
-            _fit_text(
+            _fit_text_with_suffix(
                 draw,
                 samenvatting,
+                achter,
                 font_row,
                 right_edge - tekst_x,
                 emoji_font,
@@ -1986,7 +2092,6 @@ def render_calendar(
             COLOR_BLACK,
         )
         y += row_height
-        getekend += 1
 
 
 def render_clock(

@@ -201,6 +201,7 @@ export interface CalendarWidget extends WidgetBase {
   month_names?: string[];
   today_label?: string;
   tomorrow_label?: string;
+  until_label?: string;
 }
 
 export interface ChartWidget extends WidgetBase {
