@@ -906,6 +906,38 @@ def _draw_detail_chip(
     return text_x + text_w
 
 
+# How dark the supporting text in the forecast is drawn. On a four-level panel
+# there is nothing meaningful between these three: everything above roughly 87
+# lands on one flat tone, below that the dithering starts mixing black in, and
+# then there is only black itself. Hence three steps and not a free number.
+# Each step is (supporting text, divider line).
+FORECAST_CONTRAST = {
+    "normal": (COLOR_GRAY, COLOR_LIGHT_GRAY),
+    "high": (COLOR_DARK_GRAY, COLOR_GRAY),
+    "max": (COLOR_BLACK, COLOR_GRAY),
+}
+DEFAULT_FORECAST_CONTRAST = "high"
+
+
+def _forecast_tones(widget: Widget) -> tuple[int, int]:
+    """Return the (text, divider) tones for the widget's contrast setting.
+
+    "normal" is what this widget always did and still suits a panel with 16
+    grey levels. A four-level panel such as the TRMNL needs "high" to keep the
+    day names and the low temperatures readable, which is why that is the
+    default; "max" drops the distinction with the high temperature entirely.
+    """
+    keuze = widget.get("contrast", DEFAULT_FORECAST_CONTRAST)
+    if keuze not in FORECAST_CONTRAST:
+        _LOGGER.debug(
+            "render_weather: unknown contrast %r, falling back to %r",
+            keuze,
+            DEFAULT_FORECAST_CONTRAST,
+        )
+        keuze = DEFAULT_FORECAST_CONTRAST
+    return FORECAST_CONTRAST[keuze]
+
+
 def render_weather(
     draw: ImageDraw.ImageDraw,
     widget: Widget,
@@ -1023,10 +1055,12 @@ def render_weather(
     if not forecast or forecast_days <= 0:
         return
 
+    muted, divider = _forecast_tones(widget)
+
     separator_y = detail_y + round(22 * s)
     draw.line(
         [(x, separator_y), (right_edge - PADDING, separator_y)],
-        fill=COLOR_LIGHT_GRAY,
+        fill=divider,
         width=1,
     )
 
@@ -1048,7 +1082,7 @@ def render_weather(
         draw.text(
             (cx - text_w // 2, forecast_y),
             day_label,
-            fill=COLOR_GRAY,
+            fill=muted,
             font=font_sm,
         )
 
@@ -1083,7 +1117,7 @@ def render_weather(
         draw.text(
             (cx - text_w // 2, forecast_y + round(70 * s)),
             lo_text,
-            fill=COLOR_GRAY,
+            fill=muted,
             font=font_sm,
         )
 
@@ -1097,7 +1131,7 @@ def render_weather(
             draw.text(
                 (cx - text_w // 2, forecast_y + round(88 * s)),
                 precip_text,
-                fill=COLOR_GRAY,
+                fill=muted,
                 font=font_xs,
             )
 

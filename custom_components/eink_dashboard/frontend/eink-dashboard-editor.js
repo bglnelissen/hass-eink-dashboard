@@ -168,6 +168,19 @@ export const SCHEMAS = {
                 { name: "forecast_days", default: 5, selector: { number: { min: 0, max: 14, mode: "box" } } },
             ],
         },
+        // How dark the supporting text in the forecast is drawn: day names, low
+        // temperatures and precipitation. Three steps rather than a free number,
+        // because a four-level panel has nothing meaningful in between. Normal
+        // suits a panel with 16 grey levels, high keeps a four-level one readable,
+        // max drops the distinction with the high temperature.
+        { name: "contrast", default: "high", selector: { select: {
+                    mode: "dropdown",
+                    options: [
+                        { value: "normal", label: "Normal" },
+                        { value: "high", label: "High" },
+                        { value: "max", label: "Maximum (black)" },
+                    ],
+                } } },
     ],
     sensor_rows: (d) => [
         { type: "grid", name: "", schema: posXYW(d) },

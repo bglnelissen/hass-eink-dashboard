@@ -12,6 +12,7 @@ from custom_components.eink_dashboard.const import (
     COLOR_BLACK,
     COLOR_DARK_GRAY,
     COLOR_GRAY,
+    COLOR_LIGHT_GRAY,
     PADDING,
 )
 from custom_components.eink_dashboard.render import (
@@ -474,6 +475,55 @@ class TestRenderWeather:
         assert_has_dark_pixels(
             img, PADDING, 10, PADDING + 90, 100, threshold=200
         )
+
+    def _donkerste(self, img: Image.Image, y0: int, y1: int) -> int:
+        """The darkest tone in a band of the forecast block.
+
+        Everything lighter than the darkest tone is antialiasing, so the
+        darkest value is exactly the fill that was asked for. The bands sit
+        between the condition icons, which are the only other ink down there.
+        """
+        vak = img.crop((PADDING, y0, 210, y1))
+        return min(v for v, n in enumerate(vak.histogram()) if n)
+
+    def _forecast(self, **extra: object) -> Image.Image:
+        widgets = [
+            {
+                "type": "weather",
+                "entity": "weather.home",
+                "x": PADDING,
+                "y": 10,
+                **extra,
+            }
+        ]
+        return png_to_image(render_dashboard(widgets, self._config()))
+
+    def test_forecast_day_labels_are_dark_enough_to_read(self) -> None:
+        """At COLOR_GRAY they came out flat light grey on a 2-bit panel."""
+        assert self._donkerste(self._forecast(), 108, 130) == COLOR_DARK_GRAY
+
+    def test_forecast_precipitation_is_dark_enough_to_read(self) -> None:
+        assert self._donkerste(self._forecast(), 196, 215) == COLOR_DARK_GRAY
+
+    def test_forecast_separator_is_the_middle_grey(self) -> None:
+        """The divider should read as a line, not disappear into the page."""
+        assert self._donkerste(self._forecast(), 104, 106) == COLOR_GRAY
+
+    def test_forecast_contrast_normal_restores_the_light_greys(self) -> None:
+        """What a panel with 16 grey levels had before, still selectable."""
+        img = self._forecast(contrast="normal")
+        assert self._donkerste(img, 108, 130) == COLOR_GRAY
+        assert self._donkerste(img, 104, 106) == COLOR_LIGHT_GRAY
+
+    def test_forecast_contrast_max_draws_everything_black(self) -> None:
+        img = self._forecast(contrast="max")
+        assert self._donkerste(img, 108, 130) == COLOR_BLACK
+        assert self._donkerste(img, 196, 215) == COLOR_BLACK
+
+    def test_forecast_contrast_unknown_falls_back_to_the_default(self) -> None:
+        """A typo should not make the forecast disappear into the page."""
+        img = self._forecast(contrast="onzin")
+        assert self._donkerste(img, 108, 130) == COLOR_DARK_GRAY
 
 
 MOCK_SENSOR_STATES = {
