@@ -658,6 +658,96 @@ class TestRenderDeviceBattery:
         img = png_to_image(result)
         assert_has_dark_pixels(img, PADDING + 1, 33, PADDING + 21, 42)
 
+    def test_device_battery_reads_entity_when_given(self) -> None:
+        # No level from the integration's own sensor: the entity supplies it.
+        widgets = [
+            {
+                "type": "device_battery",
+                "x": PADDING,
+                "y": 20,
+                "entity": "sensor.trmnl_battery",
+            }
+        ]
+        result = render_dashboard(
+            widgets,
+            self._config(
+                device_battery_level=None,
+                states={"sensor.trmnl_battery": {"state": "100"}},
+            ),
+        )
+        img = png_to_image(result)
+        assert_has_dark_pixels(img, PADDING + 1, 33, PADDING + 21, 42)
+
+    def test_device_battery_entity_wins_over_own_sensor(self) -> None:
+        widgets = [
+            {
+                "type": "device_battery",
+                "x": PADDING,
+                "y": 20,
+                "entity": "sensor.trmnl_battery",
+            }
+        ]
+        result = render_dashboard(
+            widgets,
+            self._config(
+                device_battery_level=100,
+                states={"sensor.trmnl_battery": {"state": "0"}},
+            ),
+        )
+        img = png_to_image(result)
+        # At 0% only the outline and nub are drawn, so the middle of the body
+        # stays white even though the own sensor would have filled it.
+        assert_all_white(img, PADDING + 6, 35, PADDING + 18, 40)
+
+    def test_device_battery_entity_accepts_float_string(self) -> None:
+        widgets = [
+            {
+                "type": "device_battery",
+                "x": PADDING,
+                "y": 20,
+                "entity": "sensor.trmnl_battery",
+            }
+        ]
+        result = render_dashboard(
+            widgets,
+            self._config(
+                states={"sensor.trmnl_battery": {"state": "66.4"}},
+            ),
+        )
+        img = png_to_image(result)
+        assert_has_dark_pixels(img, PADDING + 28, 29, PADDING + 70, 47)
+
+    def test_device_battery_unavailable_entity_is_noop(self) -> None:
+        widgets = [
+            {
+                "type": "device_battery",
+                "x": PADDING,
+                "y": 20,
+                "entity": "sensor.trmnl_battery",
+            }
+        ]
+        result = render_dashboard(
+            widgets,
+            self._config(
+                states={"sensor.trmnl_battery": {"state": "unavailable"}},
+            ),
+        )
+        img = png_to_image(result)
+        assert_all_white(img, 0, 0, 400, 100)
+
+    def test_device_battery_missing_entity_is_noop(self) -> None:
+        widgets = [
+            {
+                "type": "device_battery",
+                "x": PADDING,
+                "y": 20,
+                "entity": "sensor.weg",
+            }
+        ]
+        result = render_dashboard(widgets, self._config(states={}))
+        img = png_to_image(result)
+        assert_all_white(img, 0, 0, 400, 100)
+
     def test_device_battery_icon_scales_with_font_size(self) -> None:
         # font_size=48 → s=2 → icon is 44×20 instead of default 22×10
         widgets = [

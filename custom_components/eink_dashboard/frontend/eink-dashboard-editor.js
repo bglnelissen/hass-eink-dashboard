@@ -177,6 +177,11 @@ export const SCHEMAS = {
     ],
     device_battery: (d) => [
         { type: "grid", name: "", schema: posXY(d) },
+        // Optional. Leave empty to use this integration's own battery sensor,
+        // which only fills for devices that report their battery while fetching
+        // the image. Pick an entity for a device whose battery Home Assistant
+        // knows from elsewhere, such as a TRMNL behind its own BYOS server.
+        { name: "entity", selector: { entity: { domain: "sensor" } } },
         fontRow(FONT_SIZE_DEVICE_BATTERY),
         colorSelector(),
     ],

@@ -1160,15 +1160,36 @@ def render_device_battery(
     widget: Widget,
     config: DisplayConfig,
 ) -> None:
-    """Draw battery icon and percentage for the device's own battery."""
-    level = config.get("device_battery_level")
-    if level is None:
+    """Draw battery icon and percentage for the device's own battery.
+
+    The level normally comes from the integration's own battery sensor, which
+    is filled when a device reports its battery while fetching the image. A
+    device that never talks to Home Assistant directly, such as a TRMNL behind
+    its own BYOS server, leaves that empty even though Home Assistant does know
+    the level from somewhere else. For that case the widget takes an optional
+    ``entity`` field and reads the percentage from that entity instead.
+    """
+    entity_id = widget.get("entity")
+    if entity_id:
+        info = _resolve_entity(
+            entity_id,
+            config.get("states", {}),
+            "render_device_battery",
+        )
+        level = info.state.get("state") if info is not None else None
+    else:
+        level = config.get("device_battery_level")
+
+    # An entity can be "unknown" or "unavailable", and a percentage from a
+    # template may arrive as "66.0", so parse defensively instead of int().
+    try:
+        pct = max(0, min(100, round(float(level))))
+    except (TypeError, ValueError):
         _LOGGER.debug(
-            "render_device_battery: no battery level in config, skipping"
+            "render_device_battery: no usable battery level (%r), skipping",
+            level,
         )
         return
-
-    pct = max(0, min(100, int(level)))
 
     x = widget.get("x", PADDING)
     y = widget.get("y", 0)
