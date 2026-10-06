@@ -385,7 +385,7 @@ export const LABELS = {
     dark_color: "Dark square shade (0 black, 255 white)",
     show_if: "Show only if (template, empty means always)",
     data: "Content, such as a URL (template)",
-    module: "Pixels per module",
+    module: "QR pixel size",
     border: "White border (modules)",
     error: "Error correction",
     y_min: "Y-axis min",
