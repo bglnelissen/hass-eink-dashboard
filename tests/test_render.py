@@ -2882,3 +2882,75 @@ class TestRenderClock:
     def test_midnight_does_not_crash(self) -> None:
         """Hour 0 must map to 12 o'clock, not to an angle of nothing."""
         assert_has_dark_pixels(self._render({"time": "00:00"}), 0, 0, 80, 80)
+
+
+class TestRenderChessBoard:
+    """A chess position from a FEN, for puzzles from Lichess."""
+
+    EMPTY = "8/8/8/8/8/8/8/8 w - - 0 1"
+
+    @staticmethod
+    def _render(extra=None) -> Image.Image:
+        widget = {
+            "type": "chess_board",
+            "x": 0,
+            "y": 0,
+            "size": 80,
+            "fen": TestRenderChessBoard.EMPTY,
+            "coordinates": False,
+        }
+        widget.update(extra or {})
+        return png_to_image(
+            render_dashboard([widget], {"width": 100, "height": 100})
+        )
+
+    def test_a1_is_dark_and_b1_light(self) -> None:
+        img = self._render()
+        # Squares are 10 px; a1 is bottom left with white at the bottom.
+        assert img.getpixel((5, 75)) < 255
+        assert img.getpixel((15, 75)) == 255
+
+    def test_last_move_frames_its_squares(self) -> None:
+        img = self._render({"last_move": "b1c1"})
+        # The frame is 1 px at this size, on the left edge of b1 and c1.
+        assert img.getpixel((10, 75)) == 0
+        assert img.getpixel((20, 75)) == 0
+        assert img.getpixel((35, 75)) == 255  # d1, light, no frame
+
+    def test_black_to_move_turns_the_board(self) -> None:
+        """With black to move, a1 ends up in the top right corner."""
+        fen = "8/8/8/8/8/8/8/8 b - - 0 1"
+        img = self._render({"fen": fen, "last_move": "b1c1"})
+        assert img.getpixel((60, 5)) == 0
+        assert img.getpixel((10, 75)) != 0
+
+    def test_orientation_overrides_side_to_move(self) -> None:
+        fen = "8/8/8/8/8/8/8/8 b - - 0 1"
+        img = self._render(
+            {"fen": fen, "last_move": "b1c1", "orientation": "white"}
+        )
+        assert img.getpixel((10, 75)) == 0
+
+    def test_pieces_add_ink(self) -> None:
+        leeg = self._render()
+        vol = self._render(
+            {"fen": "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w"}
+        )
+        assert sum(vol.histogram()[:100]) > sum(leeg.histogram()[:100])
+
+    def test_it_stays_inside_its_size(self) -> None:
+        img = self._render(
+            {"fen": "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w"}
+        )
+        assert img.crop((80, 0, 100, 100)).getextrema() == (255, 255)
+        assert img.crop((0, 80, 100, 100)).getextrema() == (255, 255)
+
+    def test_an_invalid_fen_shows_up_instead_of_crashing(self) -> None:
+        img = self._render({"fen": "{{ kapot }}"})
+        assert_has_dark_pixels(img, 0, 0, 80, 80)
+
+    def test_parse_rejects_a_short_rank(self) -> None:
+        from custom_components.eink_dashboard.render import _parse_fen_board
+
+        assert _parse_fen_board("7/8/8/8/8/8/8/8 w") is None
+        assert _parse_fen_board("8/8/8/8/8/8/8/8 w") is not None

@@ -120,6 +120,8 @@ interface WidgetBase {
   font?: string;
   font_size?: number;
   color?: number;
+  /** Template; the widget is left out when it renders to something false. */
+  show_if?: string;
 }
 
 export interface TextWidget extends WidgetBase {
@@ -183,6 +185,16 @@ export interface ClockWidget extends WidgetBase {
   time?: string;
 }
 
+export interface ChessBoardWidget extends WidgetBase {
+  type: "chess_board";
+  fen?: string;
+  last_move?: string;
+  size?: number;
+  orientation?: "auto" | "white" | "black";
+  coordinates?: boolean;
+  dark_color?: number;
+}
+
 export interface CalendarWidget extends WidgetBase {
   type: "calendar";
   title?: string;
@@ -234,6 +246,7 @@ export type Widget =
   | ChartWidget
   | CalendarWidget
   | ClockWidget
+  | ChessBoardWidget
 ;
 
 export interface WidgetTypeMeta {

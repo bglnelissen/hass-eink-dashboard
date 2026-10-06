@@ -432,6 +432,69 @@ class TestEinkDashboardImage:
             await entity._async_refresh(None)
             MockTemplate.assert_not_called()
 
+    @staticmethod
+    def _resolve_with(
+        widgets: list[dict[str, Any]], rendered: dict[str, Any]
+    ) -> list[dict[str, Any]]:
+        """Run _resolve_templates with each template rendering to
+        rendered[template], or raising when that value is an exception."""
+        entity = EinkDashboardImage(_make_hass(), _make_entry())
+
+        def make(template: str, _hass: Any) -> MagicMock:
+            tpl = MagicMock()
+            tpl.is_static = "{{" not in template
+            value = rendered.get(template, template)
+            if isinstance(value, Exception):
+                tpl.async_render.side_effect = value
+            else:
+                tpl.async_render.return_value = value
+            return tpl
+
+        with patch(
+            "custom_components.eink_dashboard.image.Template", side_effect=make
+        ):
+            return entity._resolve_templates(widgets)
+
+    def test_show_if_false_leaves_the_widget_out(self) -> None:
+        widgets = [
+            {"type": "text", "text": "kat", "show_if": "{{ uur_even }}"},
+            {"type": "text", "text": "schaak", "show_if": "{{ uur_oneven }}"},
+        ]
+        result = self._resolve_with(
+            widgets, {"{{ uur_even }}": "True", "{{ uur_oneven }}": "False"}
+        )
+        assert [w["text"] for w in result] == ["kat"]
+
+    def test_show_if_treats_unavailable_as_false(self) -> None:
+        widgets = [{"type": "text", "text": "x", "show_if": "{{ s }}"}]
+        assert self._resolve_with(widgets, {"{{ s }}": "unavailable"}) == []
+
+    def test_no_show_if_always_shows(self) -> None:
+        widgets = [{"type": "text", "text": "x"}, {"type": "separator"}]
+        assert len(self._resolve_with(widgets, {})) == 2
+
+    def test_broken_show_if_shows_the_widget(self) -> None:
+        """A template error must stay visible, not make the widget vanish."""
+        widgets = [{"type": "text", "text": "x", "show_if": "{{ kapot }}"}]
+        result = self._resolve_with(
+            widgets, {"{{ kapot }}": TemplateError("undefined")}
+        )
+        assert len(result) == 1
+
+    def test_chess_board_fields_are_templates(self) -> None:
+        widgets = [
+            {
+                "type": "chess_board",
+                "fen": "{{ fen }}",
+                "last_move": "{{ zet }}",
+            }
+        ]
+        result = self._resolve_with(
+            widgets, {"{{ fen }}": "8/8/8/8/8/8/8/K6k w", "{{ zet }}": "a2a1"}
+        )
+        assert result[0]["fen"] == "8/8/8/8/8/8/8/K6k w"
+        assert result[0]["last_move"] == "a2a1"
+
     async def test_optimize_options_forwarded_to_render(self) -> None:
         from custom_components.eink_dashboard.render import render_dashboard
 

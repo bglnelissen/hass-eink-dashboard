@@ -176,6 +176,7 @@ class WidgetType(StrEnum):
     CHART = "chart"
     CALENDAR = "calendar"
     CLOCK = "clock"
+    CHESS_BOARD = "chess_board"
 
 
 # Calendar widget defaults.

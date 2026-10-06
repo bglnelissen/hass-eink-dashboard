@@ -42,6 +42,8 @@ IBM_PLEX_MONO_URL="https://github.com/IBM/plex/raw/master/packages/plex-mono/fon
 NOTO_SANS_URL="https://github.com/googlefonts/noto-fonts/raw/main/hinted/ttf/NotoSans/NotoSans-Regular.ttf"
 # Monochrome emoji, used as a fallback for characters the text fonts lack.
 NOTO_EMOJI_URL="https://github.com/google/fonts/raw/main/ofl/notoemoji/NotoEmoji%5Bwght%5D.ttf"
+# Chess pieces for the chess_board widget.
+NOTO_SYMBOLS_URL="https://github.com/google/fonts/raw/main/ofl/notosanssymbols2/NotoSansSymbols2-Regular.ttf"
 
 cleanup() {
     echo "Cleaning up generated assets..."
@@ -91,6 +93,13 @@ if [ -f "${FONTS_DIR}/NotoEmoji-Regular.ttf" ]; then
 else
     echo "==> Downloading NotoEmoji-Regular.ttf (SIL Open Font License)..."
     curl -fsSL "${NOTO_EMOJI_URL}" -o "${FONTS_DIR}/NotoEmoji-Regular.ttf"
+fi
+
+if [ -f "${FONTS_DIR}/NotoSansSymbols2-Regular.ttf" ]; then
+    echo "==> NotoSansSymbols2-Regular.ttf already exists, skipping download"
+else
+    echo "==> Downloading NotoSansSymbols2-Regular.ttf (SIL Open Font License)..."
+    curl -fsSL "${NOTO_SYMBOLS_URL}" -o "${FONTS_DIR}/NotoSansSymbols2-Regular.ttf"
 fi
 
 mkdir -p "${DIST_DIR}"

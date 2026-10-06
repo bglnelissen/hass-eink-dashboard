@@ -159,9 +159,21 @@ The component ships a WYSIWYG Lovelace card for editing the dashboard layout.
 | Battery Bar | Horizontal battery level bar with percentage |
 | Status Icons | Row of filled/outline squares for binary sensors |
 | Waste Schedule | Upcoming waste collection dates (today, tomorrow, in N days) |
+| Chess Board | A position from a FEN template, e.g. the Lichess puzzle of the day |
 
 All widgets support `x`, `y` positioning and `font_size`. Most support a `w`
 (width) override to constrain rendering to a sub-region of the display.
+
+Every widget also takes an optional `show_if` template. When it renders to
+something false (`false`, `0`, `off`, `no`, empty, `unknown`, `unavailable`)
+the widget is left out. Two widgets on the same spot can take turns that way,
+for example `{{ now().hour % 2 == 0 }}` on one and
+`{{ now().hour % 2 == 1 }}` on the other. A template that fails to render
+shows the widget, so a mistake is visible rather than silent.
+
+The chess board takes `fen` and `last_move` (UCI, such as `e2e4`) as
+templates, plus `size`, `orientation` (`auto` puts the side to move at the
+bottom), `coordinates` and `dark_color`.
 
 ## Device setup
 
@@ -229,3 +241,6 @@ Weather icons from [erikflowers/weather-icons](https://github.com/erikflowers/we
 licensed under SIL Open Font License 1.1.
 
 Roboto font by Google, licensed under Apache 2.0.
+
+Noto Sans Symbols 2 (chess pieces) by Google, licensed under SIL Open Font
+License 1.1.

@@ -47,6 +47,13 @@ _LOGGER = logging.getLogger(__name__)
 PUSH_MIN_INTERVAL = 300
 PUSH_MAX_IMAGE_BYTES = 5 * 1024 * 1024
 
+# What a show_if template may render to for "hide this widget". Includes the
+# states HA uses for an entity it cannot read, so a widget that depends on a
+# missing sensor hides instead of drawing nonsense.
+_FALSY_RESULTS: frozenset[str] = frozenset(
+    {"", "false", "0", "off", "no", "none", "unknown", "unavailable"}
+)
+
 _SPAN_RE = re.compile(r"^(\d+(?:\.\d+)?)\s*([smhd])$")
 
 
@@ -156,15 +163,23 @@ class EinkDashboardImage(ImageEntity):
     def _resolve_templates(  # must be called from the event loop
         self, widgets: list[dict[str, Any]]
     ) -> list[dict[str, Any]]:
-        """Render Jinja2 templates in widget text fields."""
+        """Render Jinja2 templates in widget text fields.
+
+        A widget whose show_if renders to something false is left out
+        entirely, so two widgets on the same spot can take turns.
+        """
         resolved = []
         for widget in widgets:
+            if not self._should_show(widget):
+                continue
             widget_type = widget.get("type")
             fields = []
             if widget_type in (WidgetType.TEXT, WidgetType.TEXT_MULTILINE):
                 fields = ["text"]
             elif widget_type == WidgetType.CHART:
                 fields = ["title", "xlabel", "ylabel"]
+            elif widget_type == WidgetType.CHESS_BOARD:
+                fields = ["fen", "last_move"]
             for field in fields:
                 if field not in widget:
                     continue
@@ -182,6 +197,24 @@ class EinkDashboardImage(ImageEntity):
                     widget = {**widget, field: str(rendered)}
             resolved.append(widget)
         return resolved
+
+    def _should_show(self, widget: dict[str, Any]) -> bool:
+        """Evaluate a widget's show_if template. No show_if means show.
+
+        A template that fails to render shows the widget anyway: a broken
+        condition should be visible on the screen, not make things vanish.
+        """
+        condition = str(widget.get("show_if", "")).strip()
+        if not condition:
+            return True
+        try:
+            result = Template(condition, self.hass).async_render(
+                parse_result=False
+            )
+        except TemplateError as err:
+            _LOGGER.warning("Failed to render show_if %r: %s", condition, err)
+            return True
+        return str(result).strip().lower() not in _FALSY_RESULTS
 
     async def _async_refresh(self, _now: Any) -> None:
         """Re-render the dashboard and push to webhooks if the image

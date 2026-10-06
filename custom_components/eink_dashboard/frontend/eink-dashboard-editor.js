@@ -55,6 +55,10 @@ export const WIDGET_TYPES = {
         label: "Clock (analog)",
         defaults: { type: "clock", x: 24, y: 0, radius: 23, circle_width: 1, hand_width: 2, center_dot: false, color: 0, offset_minutes: 0 },
     },
+    chess_board: {
+        label: "Chess board",
+        defaults: { type: "chess_board", x: 24, y: 0, size: 216, fen: "", last_move: "", orientation: "auto", coordinates: true, dark_color: 180 },
+    },
     calendar: {
         label: "Calendar",
         defaults: { type: "calendar", x: 24, y: 0, w: 0, title: "", entities: [], font_size: FONT_SIZE_CALENDAR, days: 14, max_events: 8, show_calendar: false, calendar_position: "column", calendar_font_size: 14, calendar_width: 58, calendar_max_chars: 7 },
@@ -228,6 +232,30 @@ export const SCHEMAS = {
         { name: "center_dot", selector: { boolean: {} } },
         { name: "offset_minutes", default: 0, selector: { number: { min: 0, max: 60, step: 1, mode: "box" } } },
     ],
+    chess_board: (d) => [
+        {
+            type: "grid", name: "", schema: [
+                ...posXY(d),
+                { name: "size", default: 216, selector: { number: { min: 32, max: Math.min(d.width, d.height), step: 8, mode: "box" } } },
+            ],
+        },
+        { name: "fen", required: true, selector: { template: {} } },
+        { name: "last_move", selector: { template: {} } },
+        {
+            type: "grid", name: "", schema: [
+                { name: "orientation", default: "auto", selector: { select: {
+                            options: [
+                                { value: "auto", label: "Side to move at the bottom" },
+                                { value: "white", label: "White at the bottom" },
+                                { value: "black", label: "Black at the bottom" },
+                            ],
+                            mode: "dropdown",
+                        } } },
+                { name: "dark_color", default: 180, selector: { number: { min: 0, max: 255, mode: "box" } } },
+            ],
+        },
+        { name: "coordinates", default: true, selector: { boolean: {} } },
+    ],
     calendar: (d) => [
         { type: "grid", name: "", schema: posXYW(d) },
         fontRow(FONT_SIZE_CALENDAR),
@@ -326,6 +354,13 @@ export const LABELS = {
     hand_width: "Hand thickness",
     center_dot: "Dot at the centre",
     offset_minutes: "Wind forward (minutes)",
+    fen: "Position (FEN, template)",
+    last_move: "Last move (UCI such as e2e4, template)",
+    size: "Board size",
+    orientation: "Orientation",
+    coordinates: "Show coordinates",
+    dark_color: "Dark square shade (0 black, 255 white)",
+    show_if: "Show only if (template, empty means always)",
     y_min: "Y-axis min",
     y_max: "Y-axis max",
 };
@@ -368,6 +403,8 @@ export function getSummary(widget) {
         const n = seriesCount || entityCount;
         return `${span} — ${n} sensor${n !== 1 ? "s" : ""}`;
     }
+    if (t === "chess_board")
+        return "Chess board";
     if (t === "separator")
         return `y=${widget.y ?? 0}`;
     if (t === "line") {
@@ -638,7 +675,10 @@ class EinkDashboardEditor extends HTMLElement {
         const form = document.createElement("ha-form");
         form.hass = this._hass;
         form.data = formData;
-        form.schema = schemaFn(this._display);
+        form.schema = [
+            ...schemaFn(this._display),
+            { name: "show_if", selector: { template: {} } },
+        ];
         form.computeLabel = (s) => LABELS[s.name] || s.name;
         form.addEventListener("value-changed", ((ev) => {
             ev.stopPropagation();

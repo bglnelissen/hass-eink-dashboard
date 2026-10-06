@@ -15,6 +15,7 @@ import type {
   StatusIconsWidget,
   CalendarWidget,
   ClockWidget,
+  ChessBoardWidget,
   WasteScheduleWidget,
   ChartWidget,
   LayoutResponse,
@@ -154,6 +155,15 @@ const GRID = 8;
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 export function snap(v: number): number { return Math.round(v / GRID) * GRID; }
+
+/** Mirror of _should_show in image.py. A template that has not been
+ *  resolved yet still contains "{{" and counts as shown. */
+const FALSY_RESULTS = new Set(["", "false", "0", "off", "no", "none", "unknown", "unavailable"]);
+export function isShown(widget: Widget): boolean {
+  const cond = String(widget.show_if ?? "").trim();
+  if (!cond || cond.includes("{{")) return true;
+  return !FALSY_RESULTS.has(cond.toLowerCase());
+}
 
 export function grayColor(v: number): string {
   return `rgb(${v},${v},${v})`;
@@ -999,12 +1009,14 @@ class EinkDashboardCard extends HTMLElement {
       waste_schedule: (w) => this._renderWasteSchedule(ctx, w as WasteScheduleWidget),
       calendar: (w) => this._renderCalendar(ctx, w as CalendarWidget),
       clock: (w) => this._renderClock(ctx, w as ClockWidget),
+      chess_board: (w) => this._renderChessBoard(ctx, w as ChessBoardWidget),
     };
 
     this._widgetBounds = [];
     for (let i = 0; i < this._layout.widgets.length; i++) {
       const raw = this._layout.widgets[i];
       const widget = this._applyResolvedTemplates(raw, i);
+      if (!isShown(widget)) continue;
       const fn = dispatch[widget.type];
       if (!fn) continue;
       const bounds = fn(widget);
@@ -1790,6 +1802,84 @@ class EinkDashboardCard extends HTMLElement {
     }
 
     return { x, y, w: r * 2 + 2, h: r * 2 + 2 };
+  }
+
+  /** Chess position from a FEN, mirroring render_chess_board. The pieces
+   *  come from whatever font the browser has for the chess symbols, so the
+   *  preview is close to the e-ink image but not pixel-identical. */
+  private _renderChessBoard(ctx: CanvasRenderingContext2D, widget: ChessBoardWidget): WidgetBounds {
+    const x = widget.x ?? PADDING;
+    const y = widget.y ?? 0;
+    const sq = Math.max(4, Math.floor((widget.size ?? 216) / 8));
+    const side = sq * 8;
+    const fen = String(widget.fen ?? "");
+    const parts = fen.trim().split(/\s+/);
+    const rows = (parts[0] ?? "").split("/");
+    let flipped = widget.orientation === "black";
+    if (widget.orientation !== "white" && widget.orientation !== "black") {
+      flipped = parts[1] === "b";
+    }
+    const at = (file: number, rank: number): [number, number] => [
+      x + (flipped ? 7 - file : file) * sq,
+      y + (flipped ? rank : 7 - rank) * sq,
+    ];
+
+    ctx.save();
+    ctx.fillStyle = grayColor(widget.dark_color ?? COLOR_LIGHT_GRAY);
+    for (let rank = 0; rank < 8; rank++) {
+      for (let file = 0; file < 8; file++) {
+        if ((file + rank) % 2 === 0) {
+          const [sx, sy] = at(file, rank);
+          ctx.fillRect(sx, sy, sq, sq);
+        }
+      }
+    }
+
+    const move = String(widget.last_move ?? "");
+    ctx.strokeStyle = grayColor(COLOR_BLACK);
+    ctx.lineWidth = Math.max(1, Math.floor(sq / 13));
+    for (const name of [move.slice(0, 2), move.slice(2, 4)]) {
+      const f = name.charCodeAt(0) - 97;
+      const r = name.charCodeAt(1) - 49;
+      if (name.length !== 2 || f < 0 || f > 7 || r < 0 || r > 7) continue;
+      const [sx, sy] = at(f, r);
+      ctx.strokeRect(sx + ctx.lineWidth / 2, sy + ctx.lineWidth / 2, sq - ctx.lineWidth, sq - ctx.lineWidth);
+    }
+
+    const solid: Record<string, string> = { k: "\u265a", q: "\u265b", r: "\u265c", b: "\u265d", n: "\u265e", p: "\u265f" };
+    const hollow: Record<string, string> = { k: "\u2654", q: "\u2655", r: "\u2656", b: "\u2657", n: "\u2658", p: "\u2659" };
+    ctx.font = `${Math.round(sq * 0.85)}px serif`;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    if (rows.length === 8) {
+      rows.forEach((row, i) => {
+        let file = 0;
+        for (const ch of row) {
+          if (/[1-8]/.test(ch)) { file += parseInt(ch, 10); continue; }
+          const p = ch.toLowerCase();
+          if (solid[p] && file < 8) {
+            const [sx, sy] = at(file, 7 - i);
+            const cx = sx + sq / 2;
+            const cy = sy + sq / 2;
+            if (ch !== p) {
+              ctx.fillStyle = grayColor(COLOR_WHITE);
+              ctx.fillText(solid[p], cx, cy);
+              ctx.fillStyle = grayColor(COLOR_BLACK);
+              ctx.fillText(hollow[p], cx, cy);
+            } else {
+              ctx.fillStyle = grayColor(COLOR_BLACK);
+              ctx.fillText(solid[p], cx, cy);
+            }
+          }
+          file++;
+        }
+      });
+    }
+
+    ctx.lineWidth = 1;
+    ctx.strokeRect(x + 0.5, y + 0.5, side - 1, side - 1);
+    ctx.restore();
+    return { x, y, w: side, h: side };
   }
 }
 

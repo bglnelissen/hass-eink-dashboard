@@ -77,6 +77,7 @@ _FONT_FILES: dict[str, str] = {
     "ibm_plex_mono": "IBMPlexMono-Regular.ttf",
     "noto_sans": "NotoSans-Regular.ttf",
     "noto_emoji": "NotoEmoji-Regular.ttf",
+    "noto_symbols": "NotoSansSymbols2-Regular.ttf",
 }
 
 
@@ -1217,7 +1218,7 @@ def render_device_battery(
     # An entity can be "unknown" or "unavailable", and a percentage from a
     # template may arrive as "66.0", so parse defensively instead of int().
     try:
-        pct = max(0, min(100, round(float(level))))
+        pct = max(0, min(100, round(float(str(level)))))
     except (TypeError, ValueError):
         _LOGGER.debug(
             "render_device_battery: no usable battery level (%r), skipping",
@@ -2222,12 +2223,198 @@ def render_clock(
         )
 
     zijde_klein = straal * 2 + 2
-    klein = doek.resize((zijde_klein, zijde_klein), Image.LANCZOS)
+    klein = doek.resize((zijde_klein, zijde_klein), Image.Resampling.LANCZOS)
 
     doel = config.get("_image")
     if doel is not None:
         masker = klein.point(lambda p: 255 - p)
         doel.paste(klein, (int(x), int(y)), masker)
+
+
+# Solid and hollow chess glyphs, U+265A..F and U+2654..9. A white piece is
+# the solid glyph in white with the hollow one on top in black, so it keeps a
+# white body on a grey square instead of showing the square through it.
+_CHESS_SOLID: dict[str, str] = {
+    "k": "♚",
+    "q": "♛",
+    "r": "♜",
+    "b": "♝",
+    "n": "♞",
+    "p": "♟",
+}
+_CHESS_HOLLOW: dict[str, str] = {
+    "k": "♔",
+    "q": "♕",
+    "r": "♖",
+    "b": "♗",
+    "n": "♘",
+    "p": "♙",
+}
+
+
+def _parse_fen_board(fen: str) -> list[list[str]] | None:
+    """Return the board of a FEN as 8 rows of 8 cells, rank 8 first.
+
+    An empty cell is "". Only the piece placement is read; anything else
+    in the FEN is ignored here. Returns None when it is not a valid board.
+    """
+    placement = fen.strip().split(" ")[0]
+    rows = placement.split("/")
+    if len(rows) != 8:
+        return None
+    board: list[list[str]] = []
+    for row in rows:
+        cells: list[str] = []
+        for ch in row:
+            if ch.isdigit():
+                cells.extend([""] * int(ch))
+            elif ch.lower() in _CHESS_SOLID:
+                cells.append(ch)
+            else:
+                return None
+        if len(cells) != 8:
+            return None
+        board.append(cells)
+    return board
+
+
+def _parse_square(name: str) -> tuple[int, int] | None:
+    """Turn "e4" into (file, rank) counted from 0, so (4, 3)."""
+    if len(name) != 2:
+        return None
+    file = ord(name[0]) - ord("a")
+    rank = ord(name[1]) - ord("1")
+    if 0 <= file < 8 and 0 <= rank < 8:
+        return file, rank
+    return None
+
+
+def render_chess_board(
+    draw: ImageDraw.ImageDraw,
+    widget: Widget,
+    _config: DisplayConfig,
+) -> None:
+    """Draw a chess position from a FEN, for example a Lichess puzzle.
+
+    Fields: fen, last_move in UCI ("a7a5", its two squares get a frame),
+    size in pixels (rounded down to a multiple of 8), orientation ("auto"
+    puts the side to move at the bottom, or "white" / "black"),
+    coordinates, and dark_color for the dark squares.
+
+    The pieces need the Noto Sans Symbols 2 font. An invalid FEN draws an
+    empty frame with the raw text in it, so a broken template shows up on
+    the screen instead of quietly drawing nothing.
+    """
+    x = int(widget.get("x", PADDING))
+    y = int(widget.get("y", 0))
+    square = max(4, int(widget.get("size", 216)) // 8)
+    side = square * 8
+    fen = str(widget.get("fen", ""))
+    dark = int(widget.get("dark_color", COLOR_LIGHT_GRAY))
+
+    board = _parse_fen_board(fen)
+    if board is None:
+        _LOGGER.warning("render_chess_board: not a valid FEN: %r", fen)
+        draw.rectangle([x, y, x + side - 1, y + side - 1], outline=COLOR_BLACK)
+        render_text_multiline(
+            draw,
+            {
+                "x": x + 4,
+                "y": y + 4,
+                "w": side - 8,
+                "text": fen or "(no FEN)",
+                "font_size": max(8, square // 2),
+            },
+            {"width": x + side},
+        )
+        return
+
+    orientation = widget.get("orientation", "auto")
+    if orientation not in ("white", "black"):
+        parts = fen.split()
+        to_move = parts[1] if len(parts) > 1 else "w"
+        orientation = "black" if to_move == "b" else "white"
+    flipped = orientation == "black"
+
+    def to_screen(file: int, rank: int) -> tuple[int, int]:
+        """Top-left pixel of a square."""
+        col = 7 - file if flipped else file
+        row = rank if flipped else 7 - rank
+        return x + col * square, y + row * square
+
+    for rank in range(8):
+        for file in range(8):
+            if (file + rank) % 2 == 0:  # a1 is a dark square
+                sx, sy = to_screen(file, rank)
+                draw.rectangle(
+                    [sx, sy, sx + square - 1, sy + square - 1], fill=dark
+                )
+
+    if widget.get("coordinates", True):
+        coord_font = _load_font(max(7, round(square * 0.32)))
+        inset = max(1, square // 14)
+        for i in range(8):
+            # Rank numbers in the left column, file letters along the
+            # bottom row, each in the tone of the other square colour.
+            file, rank = (7, i) if flipped else (0, i)
+            sx, sy = to_screen(file, rank)
+            tone = COLOR_WHITE if (file + rank) % 2 == 0 else dark
+            draw.text(
+                (sx + inset, sy + inset),
+                str(rank + 1),
+                font=coord_font,
+                fill=tone,
+            )
+            file, rank = (i, 7) if flipped else (i, 0)
+            sx, sy = to_screen(file, rank)
+            tone = COLOR_WHITE if (file + rank) % 2 == 0 else dark
+            draw.text(
+                (sx + square - inset, sy + square - inset),
+                "abcdefgh"[file],
+                font=coord_font,
+                fill=tone,
+                anchor="rd",
+            )
+
+    last_move = str(widget.get("last_move", "")).strip()
+    frame = max(1, square // 13)
+    for name in (last_move[0:2], last_move[2:4]):
+        pos = _parse_square(name)
+        if pos is None:
+            continue
+        sx, sy = to_screen(*pos)
+        draw.rectangle(
+            [sx, sy, sx + square - 1, sy + square - 1],
+            outline=COLOR_BLACK,
+            width=frame,
+        )
+
+    piece_font = _load_font(round(square * 0.9), font="noto_symbols")
+    for row, cells in enumerate(board):
+        for file, piece in enumerate(cells):
+            if not piece:
+                continue
+            sx, sy = to_screen(file, 7 - row)
+            solid = _CHESS_SOLID[piece.lower()]
+            # Centre on the solid glyph's ink, not on the font's line box,
+            # which sits the pieces visibly too high.
+            left, top, right, bottom = draw.textbbox(
+                (0, 0), solid, font=piece_font
+            )
+            px = sx + (square - (right - left)) / 2 - left
+            py = sy + (square - (bottom - top)) / 2 - top
+            if piece.isupper():
+                draw.text((px, py), solid, font=piece_font, fill=COLOR_WHITE)
+                draw.text(
+                    (px, py),
+                    _CHESS_HOLLOW[piece.lower()],
+                    font=piece_font,
+                    fill=COLOR_BLACK,
+                )
+            else:
+                draw.text((px, py), solid, font=piece_font, fill=COLOR_BLACK)
+
+    draw.rectangle([x, y, x + side - 1, y + side - 1], outline=COLOR_BLACK)
 
 
 _RENDERERS: dict[WidgetType, RendererFn] = {
@@ -2243,6 +2430,7 @@ _RENDERERS: dict[WidgetType, RendererFn] = {
     WidgetType.CHART: render_chart,
     WidgetType.CALENDAR: render_calendar,
     WidgetType.CLOCK: render_clock,
+    WidgetType.CHESS_BOARD: render_chess_board,
 }
 
 

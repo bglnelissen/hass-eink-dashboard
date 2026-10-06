@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-import { snap, grayColor, parseDaysUntil, formatRelativeDate, buildHeaderText, shouldShowCopyUrl } from "../src/eink-dashboard-card.js";
+import { snap, grayColor, parseDaysUntil, formatRelativeDate, buildHeaderText, shouldShowCopyUrl, isShown } from "../src/eink-dashboard-card.js";
 
 describe("snap", () => {
   it("snaps 0 to 0", () => expect(snap(0)).toBe(0));
@@ -98,4 +98,22 @@ describe("shouldShowCopyUrl", () => {
   it("returns false for custom with webhooks", () => expect(shouldShowCopyUrl("custom", true)).toBe(false));
   it("returns false for trmnl_og", () => expect(shouldShowCopyUrl("trmnl_og", false)).toBe(false));
   it("returns false for trmnl_x", () => expect(shouldShowCopyUrl("trmnl_x", true)).toBe(false));
+});
+
+// ── show_if ───────────────────────────────────────────────────────────────────
+
+describe("isShown", () => {
+  it("shows a widget without show_if", () => {
+    expect(isShown({ type: "text" })).toBe(true);
+  });
+
+  it("hides a widget whose show_if resolved to something false", () => {
+    for (const v of ["False", "0", "off", "", " no ", "unavailable"]) {
+      expect(isShown({ type: "text", show_if: v === "" ? "false" : v })).toBe(false);
+    }
+  });
+
+  it("shows a widget whose template has not been resolved yet", () => {
+    expect(isShown({ type: "text", show_if: "{{ now().hour % 2 == 0 }}" })).toBe(true);
+  });
 });
