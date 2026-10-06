@@ -180,6 +180,8 @@ class EinkDashboardImage(ImageEntity):
                 fields = ["title", "xlabel", "ylabel"]
             elif widget_type == WidgetType.CHESS_BOARD:
                 fields = ["fen", "last_move"]
+            elif widget_type == WidgetType.QR_CODE:
+                fields = ["data"]
             for field in fields:
                 if field not in widget:
                     continue

@@ -2954,3 +2954,56 @@ class TestRenderChessBoard:
 
         assert _parse_fen_board("7/8/8/8/8/8/8/8 w") is None
         assert _parse_fen_board("8/8/8/8/8/8/8/8 w") is not None
+
+
+class TestRenderQrCode:
+    """A QR code from a template, such as the link to a Lichess puzzle."""
+
+    URL = "https://lichess.org/training/rPpro"
+
+    @staticmethod
+    def _render(extra=None) -> Image.Image:
+        widget = {
+            "type": "qr_code",
+            "x": 5,
+            "y": 7,
+            "data": TestRenderQrCode.URL,
+        }
+        widget.update(extra or {})
+        return png_to_image(
+            render_dashboard([widget], {"width": 200, "height": 200})
+        )
+
+    def test_pixels_match_the_segno_matrix(self) -> None:
+        """Every module is a solid block of module x module pixels."""
+        import segno
+
+        img = self._render({"module": 3, "border": 2})
+        qr = segno.make(self.URL, error="l", micro=False)
+        for row, bits in enumerate(qr.matrix_iter(border=2)):
+            for col, dark in enumerate(bits):
+                for dy in range(3):
+                    for dx in range(3):
+                        pixel = img.getpixel(
+                            (5 + col * 3 + dx, 7 + row * 3 + dy)
+                        )
+                        assert pixel == (0 if dark else 255)
+
+    def test_size_follows_module_and_border(self) -> None:
+        import segno
+
+        img = self._render({"module": 4, "border": 1})
+        modules = segno.make(self.URL, error="l", micro=False).symbol_size(
+            border=1
+        )[0]
+        side = modules * 4
+        assert img.crop((5 + side, 0, 200, 200)).getextrema() == (255, 255)
+        assert img.crop((0, 7 + side, 200, 200)).getextrema() == (255, 255)
+        assert_has_dark_pixels(img, 5, 7, 5 + side, 7 + side)
+
+    def test_empty_data_draws_nothing(self) -> None:
+        assert self._render({"data": "  "}).getextrema() == (255, 255)
+
+    def test_too_much_data_shows_up_instead_of_crashing(self) -> None:
+        img = self._render({"data": "x" * 4000})
+        assert_has_dark_pixels(img, 5, 7, 105, 107)

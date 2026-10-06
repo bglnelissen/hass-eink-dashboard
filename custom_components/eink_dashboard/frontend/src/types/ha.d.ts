@@ -195,6 +195,14 @@ export interface ChessBoardWidget extends WidgetBase {
   dark_color?: number;
 }
 
+export interface QrCodeWidget extends WidgetBase {
+  type: "qr_code";
+  data?: string;
+  module?: number;
+  border?: number;
+  error?: "l" | "m" | "q" | "h";
+}
+
 export interface CalendarWidget extends WidgetBase {
   type: "calendar";
   title?: string;
@@ -247,6 +255,7 @@ export type Widget =
   | CalendarWidget
   | ClockWidget
   | ChessBoardWidget
+  | QrCodeWidget
 ;
 
 export interface WidgetTypeMeta {

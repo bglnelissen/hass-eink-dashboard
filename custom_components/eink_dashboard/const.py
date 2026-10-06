@@ -177,6 +177,7 @@ class WidgetType(StrEnum):
     CALENDAR = "calendar"
     CLOCK = "clock"
     CHESS_BOARD = "chess_board"
+    QR_CODE = "qr_code"
 
 
 # Calendar widget defaults.

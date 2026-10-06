@@ -75,6 +75,10 @@ export const WIDGET_TYPES: Record<string, WidgetTypeMeta> = {
     label: "Chess board",
     defaults: { type: "chess_board", x: 24, y: 0, size: 216, fen: "", last_move: "", orientation: "auto", coordinates: true, dark_color: 180 },
   },
+  qr_code: {
+    label: "QR code",
+    defaults: { type: "qr_code", x: 24, y: 0, data: "", module: 3, border: 2, error: "l", color: 0 },
+  },
   calendar: {
     label: "Calendar",
     defaults: { type: "calendar", x: 24, y: 0, w: 0, title: "", entities: [], font_size: FONT_SIZE_CALENDAR, days: 14, max_events: 8, show_calendar: false, calendar_position: "column", calendar_font_size: 14, calendar_width: 58, calendar_max_chars: 7 },
@@ -292,6 +296,26 @@ export const SCHEMAS: Record<string, (d: DisplayConfig) => HaFormSchema[]> = {
     { name: "coordinates", default: true, selector: { boolean: {} } },
   ],
 
+  qr_code: (d) => [
+    { type: "grid", name: "", schema: posXY(d) },
+    { name: "data", required: true, selector: { template: {} } },
+    {
+      type: "grid", name: "", schema: [
+        { name: "module", default: 3, selector: { number: { min: 1, max: 20, mode: "box" } } },
+        { name: "border", default: 2, selector: { number: { min: 0, max: 8, mode: "box" } } },
+        { name: "error", default: "l", selector: { select: {
+          options: [
+            { value: "l", label: "L (smallest)" },
+            { value: "m", label: "M" },
+            { value: "q", label: "Q" },
+            { value: "h", label: "H (most robust)" },
+          ],
+          mode: "dropdown",
+        } } },
+      ],
+    },
+  ],
+
   calendar: (d) => [
     { type: "grid", name: "", schema: posXYW(d) },
     fontRow(FONT_SIZE_CALENDAR),
@@ -399,6 +423,10 @@ export const LABELS: Record<string, string> = {
   coordinates: "Show coordinates",
   dark_color: "Dark square shade (0 black, 255 white)",
   show_if: "Show only if (template, empty means always)",
+  data: "Content, such as a URL (template)",
+  module: "Pixels per module",
+  border: "White border (modules)",
+  error: "Error correction",
   y_min: "Y-axis min",
   y_max: "Y-axis max",
 };
@@ -447,6 +475,7 @@ export function getSummary(widget: Widget): string {
     return `${span} — ${n} sensor${n !== 1 ? "s" : ""}`;
   }
   if (t === "chess_board") return "Chess board";
+  if (t === "qr_code") return "QR code";
   if (t === "separator") return `y=${widget.y ?? 0}`;
   if (t === "line") {
     return `(${widget.x ?? 0},${widget.y ?? 0}) → (${widget.x2 ?? 0},${widget.y2 ?? 0})`;

@@ -160,6 +160,7 @@ The component ships a WYSIWYG Lovelace card for editing the dashboard layout.
 | Status Icons | Row of filled/outline squares for binary sensors |
 | Waste Schedule | Upcoming waste collection dates (today, tomorrow, in N days) |
 | Chess Board | A position from a FEN template, e.g. the Lichess puzzle of the day |
+| QR Code | A QR code from a template, e.g. a link to that puzzle |
 
 All widgets support `x`, `y` positioning and `font_size`. Most support a `w`
 (width) override to constrain rendering to a sub-region of the display.
@@ -174,6 +175,10 @@ shows the widget, so a mistake is visible rather than silent.
 The chess board takes `fen` and `last_move` (UCI, such as `e2e4`) as
 templates, plus `size`, `orientation` (`auto` puts the side to move at the
 bottom), `coordinates` and `dark_color`.
+
+The QR code takes `data` as a template, plus `module` (pixels per module),
+`border` (white modules around it) and `error` (`l`, `m`, `q` or `h`). It
+needs the `segno` package, which Home Assistant installs from the manifest.
 
 ## Device setup
 
@@ -241,6 +246,9 @@ Weather icons from [erikflowers/weather-icons](https://github.com/erikflowers/we
 licensed under SIL Open Font License 1.1.
 
 Roboto font by Google, licensed under Apache 2.0.
+
+QR codes are encoded with [segno](https://github.com/heuer/segno), BSD
+licence.
 
 Noto Sans Symbols 2 (chess pieces) by Google, licensed under SIL Open Font
 License 1.1.

@@ -8,6 +8,6 @@
   "documentation": "https://github.com/bglnelissen/hass-eink-dashboard",
   "iot_class": "local_polling",
   "issue_tracker": "https://github.com/bglnelissen/hass-eink-dashboard/issues",
-  "requirements": [],
-  "version": "0.1.16"
+  "requirements": ["segno>=1.6.1"],
+  "version": "0.1.17"
 }

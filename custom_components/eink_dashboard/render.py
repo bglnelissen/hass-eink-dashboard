@@ -2417,6 +2417,60 @@ def render_chess_board(
     draw.rectangle([x, y, x + side - 1, y + side - 1], outline=COLOR_BLACK)
 
 
+def render_qr_code(
+    draw: ImageDraw.ImageDraw,
+    widget: Widget,
+    _config: DisplayConfig,
+) -> None:
+    """Draw a QR code for the text in data, for example a URL.
+
+    Fields: data (a template), module (pixels per module, default 3),
+    border (white modules around it, default 2; the standard asks for 4,
+    but a phone reads it fine with 2 on an otherwise white area), error
+    (correction level l, m, q or h; default l, the smallest code) and
+    color. The code is drawn with its top-left corner, quiet zone
+    included, at x and y.
+
+    Each module is a whole number of pixels and drawn without smoothing, so
+    the edges stay sharp on e-ink. Data that does not fit draws an empty
+    frame with the raw text in it, like an invalid FEN on the chess board.
+    """
+    import segno  # noqa: PLC0415, only needed by this widget
+
+    x = int(widget.get("x", PADDING))
+    y = int(widget.get("y", 0))
+    data = str(widget.get("data", "")).strip()
+    module = max(1, int(widget.get("module", 3)))
+    border = max(0, int(widget.get("border", 2)))
+    color = widget.get("color", COLOR_BLACK)
+    if not data:
+        return
+
+    try:
+        qr = segno.make(data, error=str(widget.get("error", "l")), micro=False)
+    except (segno.DataOverflowError, ValueError) as err:
+        _LOGGER.warning("render_qr_code: cannot encode %r: %s", data, err)
+        draw.rectangle([x, y, x + 99, y + 99], outline=COLOR_BLACK)
+        render_text_multiline(
+            draw,
+            {"x": x + 4, "y": y + 4, "w": 92, "text": data, "font_size": 10},
+            {"width": x + 100},
+        )
+        return
+
+    side = qr.symbol_size(border=border)[0] * module
+    draw.rectangle([x, y, x + side - 1, y + side - 1], fill=COLOR_WHITE)
+    for row, bits in enumerate(qr.matrix_iter(border=border)):
+        for col, dark in enumerate(bits):
+            if dark:
+                left = x + col * module
+                top = y + row * module
+                draw.rectangle(
+                    [left, top, left + module - 1, top + module - 1],
+                    fill=color,
+                )
+
+
 _RENDERERS: dict[WidgetType, RendererFn] = {
     WidgetType.TEXT: render_text,
     WidgetType.TEXT_MULTILINE: render_text_multiline,
@@ -2431,6 +2485,7 @@ _RENDERERS: dict[WidgetType, RendererFn] = {
     WidgetType.CALENDAR: render_calendar,
     WidgetType.CLOCK: render_clock,
     WidgetType.CHESS_BOARD: render_chess_board,
+    WidgetType.QR_CODE: render_qr_code,
 }
 
 

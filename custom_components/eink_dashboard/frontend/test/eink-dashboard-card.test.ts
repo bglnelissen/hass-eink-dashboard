@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-import { snap, grayColor, parseDaysUntil, formatRelativeDate, buildHeaderText, shouldShowCopyUrl, isShown } from "../src/eink-dashboard-card.js";
+import { snap, grayColor, parseDaysUntil, formatRelativeDate, buildHeaderText, shouldShowCopyUrl, isShown, qrModules } from "../src/eink-dashboard-card.js";
 
 describe("snap", () => {
   it("snaps 0 to 0", () => expect(snap(0)).toBe(0));
@@ -115,5 +115,21 @@ describe("isShown", () => {
 
   it("shows a widget whose template has not been resolved yet", () => {
     expect(isShown({ type: "text", show_if: "{{ now().hour % 2 == 0 }}" })).toBe(true);
+  });
+});
+
+// ── qrModules ─────────────────────────────────────────────────────────────────
+
+describe("qrModules", () => {
+  it("fits a Lichess puzzle URL in version 3, 29 modules", () => {
+    expect(qrModules("https://lichess.org/training/rPpro", 0)).toBe(29);
+  });
+
+  it("adds the quiet zone on both sides", () => {
+    expect(qrModules("https://lichess.org/training/rPpro", 2)).toBe(33);
+  });
+
+  it("uses version 1 for a short text", () => {
+    expect(qrModules("hallo", 0)).toBe(21);
   });
 });

@@ -33,9 +33,9 @@ function findField(schema: HaFormSchema[], name: string): HaFormSchema | undefin
 // ── WIDGET_TYPES ──────────────────────────────────────────────────────────────
 
 describe("WIDGET_TYPES", () => {
-  const ALL_TYPES = ["text", "text_multiline", "line", "separator", "weather", "sensor_rows", "device_battery", "status_icons", "waste_schedule", "chart", "calendar", "clock", "chess_board"];
+  const ALL_TYPES = ["text", "text_multiline", "line", "separator", "weather", "sensor_rows", "device_battery", "status_icons", "waste_schedule", "chart", "calendar", "clock", "chess_board", "qr_code"];
 
-  it("has all 13 widget types", () => {
+  it("has all 14 widget types", () => {
     expect(Object.keys(WIDGET_TYPES).sort()).toEqual(ALL_TYPES.sort());
   });
 
@@ -51,8 +51,8 @@ describe("WIDGET_TYPES", () => {
 // ── SCHEMAS ───────────────────────────────────────────────────────────────────
 
 describe("SCHEMAS", () => {
-  it("has a schema builder for all 13 widget types", () => {
-    const ALL_TYPES = ["text", "text_multiline", "line", "separator", "weather", "sensor_rows", "device_battery", "status_icons", "waste_schedule", "chart", "calendar", "clock", "chess_board"];
+  it("has a schema builder for all 14 widget types", () => {
+    const ALL_TYPES = ["text", "text_multiline", "line", "separator", "weather", "sensor_rows", "device_battery", "status_icons", "waste_schedule", "chart", "calendar", "clock", "chess_board", "qr_code"];
     expect(Object.keys(SCHEMAS).sort()).toEqual(ALL_TYPES.sort());
   });
 

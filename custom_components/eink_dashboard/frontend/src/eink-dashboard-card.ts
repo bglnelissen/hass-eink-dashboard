@@ -16,6 +16,7 @@ import type {
   CalendarWidget,
   ClockWidget,
   ChessBoardWidget,
+  QrCodeWidget,
   WasteScheduleWidget,
   ChartWidget,
   LayoutResponse,
@@ -165,6 +166,17 @@ export function isShown(widget: Widget): boolean {
   return !FALSY_RESULTS.has(cond.toLowerCase());
 }
 
+/** Byte capacity of QR versions 1 to 20 at error level L. */
+const QR_BYTES_L = [17, 32, 53, 78, 106, 134, 154, 192, 230, 271, 321, 367, 425, 458, 520, 586, 644, 718, 792, 858];
+
+/** Side in modules, quiet zone included, of the smallest QR code that holds
+ *  data in byte mode at level L. An estimate: segno may pick a denser mode. */
+export function qrModules(data: string, border: number): number {
+  const bytes = new TextEncoder().encode(data).length;
+  const version = QR_BYTES_L.findIndex((cap) => cap >= bytes) + 1 || 20;
+  return 17 + 4 * version + 2 * border;
+}
+
 export function grayColor(v: number): string {
   return `rgb(${v},${v},${v})`;
 }
@@ -244,6 +256,8 @@ class EinkDashboardCard extends HTMLElement {
   private _fetchGeneration = 0;
   private _showServerImage = false;
   private _serverImg: HTMLImageElement | null = null;
+  /** The rendered PNG, for widgets the canvas cannot draw itself (QR codes). */
+  private _renderedPng: HTMLImageElement | null = null;
   private _container!: HTMLElement;
   private _toggleBtn!: HTMLButtonElement;
   private _editMode = false;
@@ -603,6 +617,7 @@ class EinkDashboardCard extends HTMLElement {
       const entryId = await this._resolveEntryId();
       if (gen !== this._fetchGeneration) return;
       this._resolvedEntryId = entryId;
+      this._loadRenderedPng(entryId);
 
       const resp = await this._hass!.callApi<LayoutResponse>(
         "GET",
@@ -1010,6 +1025,7 @@ class EinkDashboardCard extends HTMLElement {
       calendar: (w) => this._renderCalendar(ctx, w as CalendarWidget),
       clock: (w) => this._renderClock(ctx, w as ClockWidget),
       chess_board: (w) => this._renderChessBoard(ctx, w as ChessBoardWidget),
+      qr_code: (w) => this._renderQrCode(ctx, w as QrCodeWidget),
     };
 
     this._widgetBounds = [];
@@ -1802,6 +1818,33 @@ class EinkDashboardCard extends HTMLElement {
     }
 
     return { x, y, w: r * 2 + 2, h: r * 2 + 2 };
+  }
+
+  private _loadRenderedPng(entryId: string): void {
+    const img = new Image();
+    img.onload = () => this._scheduleRender();
+    img.src = `/api/eink_dashboard/${entryId}/image.png?_t=${Date.now()}`;
+    this._renderedPng = img;
+  }
+
+  /** QR code: the canvas has no QR encoder, so this copies the code out of
+   *  the image the server rendered. Until that has loaded, and for a code
+   *  the server has not drawn yet, it shows a dashed outline. */
+  private _renderQrCode(ctx: CanvasRenderingContext2D, widget: QrCodeWidget): WidgetBounds {
+    const x = widget.x ?? PADDING;
+    const y = widget.y ?? 0;
+    const side = qrModules(String(widget.data ?? ""), widget.border ?? 2) * (widget.module ?? 3);
+    const png = this._renderedPng;
+    if (png && png.complete && png.naturalWidth > 0) {
+      ctx.drawImage(png, x, y, side, side, x, y, side, side);
+    } else {
+      ctx.save();
+      ctx.strokeStyle = "#888";
+      ctx.setLineDash([4, 3]);
+      ctx.strokeRect(x + 0.5, y + 0.5, side - 1, side - 1);
+      ctx.restore();
+    }
+    return { x, y, w: side, h: side };
   }
 
   /** Chess position from a FEN, mirroring render_chess_board. The pieces
