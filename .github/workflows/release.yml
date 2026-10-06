@@ -28,6 +28,8 @@ jobs:
           cache: pip
           cache-dependency-path: tox.ini
       - run: pip install tox
+      - if: matrix.tox_env == 'test'
+        run: bash scripts/fetch_fonts.sh
       - run: tox -e ${{ matrix.tox_env }}
 
   validate-frontend:

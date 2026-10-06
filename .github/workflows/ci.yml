@@ -52,6 +52,7 @@ jobs:
           cache: pip
           cache-dependency-path: tox.ini
       - run: pip install tox
+      - run: bash scripts/fetch_fonts.sh
       - run: tox -e test
 
   frontend-typecheck:
