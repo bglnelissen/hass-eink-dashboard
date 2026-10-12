@@ -1497,12 +1497,164 @@ def _hex_to_gray_float(hex_color: str) -> float:
         return 0.0
 
 
+def hourly_usage(
+    points: list[dict[str, float]],
+    day_start: float,
+    now: float,
+    factor: float = 1.0,
+) -> list[float | None]:
+    """Usage per hour of today for an ever-increasing meter.
+
+    ``points`` are the raw states (``t`` timestamp, ``v`` value) of a
+    meter such as a water, gas or electricity counter, starting with the
+    state at or before ``day_start`` (local midnight). Each increase is
+    booked in the hour it was reported. A drop (a meter that restarted
+    and fell back) is skipped, like the utility_meter helper does, and
+    counting goes on from the lower value.
+
+    Returns 24 values, one per hour since midnight. Hours that have not
+    started yet are ``None`` so the chart can leave them empty. ``factor``
+    converts units, for example 1000 for m3 to litres.
+    """
+    usage: list[float | None] = [None] * 24
+    current_hour = min(23, max(0, int((now - day_start) // 3600)))
+    for hour in range(current_hour + 1):
+        usage[hour] = 0.0
+
+    previous: float | None = None
+    for point in sorted(points, key=lambda p: p.get("t", 0.0)):
+        t, v = point.get("t"), point.get("v")
+        if t is None or v is None:
+            continue
+        if previous is not None and t > day_start:
+            delta = v - previous
+            hour = int((t - day_start) // 3600)
+            if delta > 0 and 0 <= hour <= current_hour:
+                usage[hour] = (usage[hour] or 0.0) + delta * factor
+        previous = v
+    return usage
+
+
+def _nice_axis_max(value: float, max_ticks: int = 5) -> tuple[float, float]:
+    """Round ``value`` up to a tidy axis maximum. Returns (max, step)."""
+    if value <= 0:
+        return 1.0, 0.5
+    rough_step = value / max_ticks
+    magnitude = 10 ** math.floor(math.log10(rough_step))
+    step = magnitude
+    for factor in (1, 2, 5, 10):
+        step = magnitude * factor
+        if step >= rough_step:
+            break
+    return math.ceil(value / step) * step, step
+
+
+def _render_hourly_usage(  # noqa: C901
+    draw: ImageDraw.ImageDraw,
+    widget: Widget,
+    config: DisplayConfig,
+) -> None:
+    """Bar chart with one bar per hour of today: how much was used in
+    that hour (a histogram, not a running total).
+    """
+    x = widget.get("x", PADDING)
+    y = widget.get("y", 0)
+    w = widget.get("w") or config["width"] - x - PADDING
+    h = widget.get("h", 200)
+
+    series = widget.get("config", {}).get("series", [])
+    entities = [s.get("entity") for s in series if s.get("entity")]
+    entities += [e for e in widget.get("entities", []) if e]
+    if not entities:
+        return
+    day_start = config.get("day_start")
+    now = config.get("now")
+    if day_start is None or now is None:
+        return
+
+    usage = hourly_usage(
+        config.get("histories", {}).get(entities[0], []),
+        day_start,
+        now,
+        float(widget.get("value_factor", 1) or 1),
+    )
+
+    font_sm = _load_font(max(8, round(h * 0.08)))
+    font_title = _load_font(widget.get("title_font_size", 18))
+    title = widget.get("title", "")
+
+    top = y + 2
+    if title:
+        draw.text((x, top), title, fill=COLOR_BLACK, font=font_title)
+        top += draw.textbbox((0, 0), "Ag", font=font_title)[3] + 8
+
+    tick_h = draw.textbbox((0, 0), "0", font=font_sm)[3]
+    px1, px2 = x + 44, x + w - 6
+    py1, py2 = top + tick_h // 2, y + h - tick_h - 8
+    plot_w, plot_h = px2 - px1, py2 - py1
+    if plot_w < 48 or plot_h < 20:
+        return
+
+    highest = max((u for u in usage if u is not None), default=0.0)
+    if widget.get("y_max") is not None:
+        axis_max, step = float(widget["y_max"]), float(widget["y_max"]) / 4
+    else:
+        axis_max, step = _nice_axis_max(highest)
+
+    def _vy(value: float) -> int:
+        return round(py2 - min(value, axis_max) / axis_max * plot_h)
+
+    # Horizontal grid lines with their value on the left.
+    decimals = 0 if step >= 1 else max(0, -math.floor(math.log10(step)))
+    tick = 0.0
+    while tick <= axis_max + step * 0.001:
+        ty = _vy(tick)
+        if tick > 0:
+            draw.line([(px1, ty), (px2, ty)], fill=COLOR_LIGHT_GRAY, width=1)
+        label = f"{tick:.{decimals}f}"
+        lw = draw.textbbox((0, 0), label, font=font_sm)[2]
+        draw.text(
+            (px1 - 6 - lw, ty - tick_h // 2),
+            label,
+            fill=COLOR_BLACK,
+            font=font_sm,
+        )
+        tick += step
+
+    # One slot per hour; the bar keeps a small gap on both sides.
+    slot = plot_w / 24
+    gap = max(1, round(slot * 0.15))
+    for hour, value in enumerate(usage):
+        if not value or value <= 0:
+            continue
+        bx1 = round(px1 + hour * slot) + gap
+        bx2 = round(px1 + (hour + 1) * slot) - gap
+        by1 = min(_vy(value), py2 - 1)
+        draw.rectangle([bx1, by1, max(bx1, bx2), py2], fill=COLOR_BLACK)
+
+    draw.line([(px1, py2), (px2, py2)], fill=COLOR_BLACK, width=2)
+
+    # Hour labels: every 6 hours on a narrow chart, every 3 on a wide one.
+    every = 3 if plot_w >= 600 else 6
+    for hour in range(0, 25, every):
+        tx = round(px1 + hour * slot)
+        draw.line([(tx, py2), (tx, py2 + 3)], fill=COLOR_BLACK, width=1)
+        label = f"{hour:02d}"
+        lw = draw.textbbox((0, 0), label, font=font_sm)[2]
+        lx = min(max(tx - lw // 2, x), x + w - lw)
+        draw.text((lx, py2 + 5), label, fill=COLOR_BLACK, font=font_sm)
+
+
 def render_chart(  # noqa: C901
     draw: ImageDraw.ImageDraw,
     widget: Widget,
     config: DisplayConfig,
 ) -> None:
     """Render an ApexCharts-compatible time-series chart using pure PIL."""
+    if widget.get("chart_type") == "hourly_usage":
+        _render_hourly_usage(draw, widget, config)
+        return
+
     x = widget.get("x", PADDING)
     y = widget.get("y", 0)
     w_raw = widget.get("w")

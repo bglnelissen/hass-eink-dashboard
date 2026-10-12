@@ -174,6 +174,7 @@ storage_mod.Store = MagicMock  # type: ignore[attr-defined]
 
 dt_mod = sys.modules["homeassistant.util.dt"]
 dt_mod.utcnow = MagicMock()  # type: ignore[attr-defined]
+dt_mod.start_of_local_day = MagicMock()  # type: ignore[attr-defined]
 
 
 class _SelectSelectorMode:

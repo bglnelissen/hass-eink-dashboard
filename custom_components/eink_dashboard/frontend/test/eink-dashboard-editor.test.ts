@@ -107,6 +107,25 @@ describe("SCHEMAS", () => {
   });
 });
 
+describe("chart hourly usage", () => {
+  it("chart schema lets you pick the chart type and a value factor", () => {
+    const fields = flattenFields(SCHEMAS.chart(DISPLAY));
+    expect(fields).toContain("chart_type");
+    expect(fields).toContain("value_factor");
+  });
+
+  it("chart type offers the hourly usage bars", () => {
+    const field = findField(SCHEMAS.chart(DISPLAY), "chart_type");
+    const options = (field?.selector as { select: { options: { value: string }[] } }).select.options;
+    expect(options.map((o) => o.value)).toEqual(["line", "hourly_usage"]);
+  });
+
+  it("summary of an hourly usage chart says so", () => {
+    expect(getSummary({ type: "chart", chart_type: "hourly_usage", entities: ["sensor.water"] } as never))
+      .toBe("Usage per hour today — 1 sensor");
+  });
+});
+
 // ── LABELS ────────────────────────────────────────────────────────────────────
 
 describe("LABELS", () => {

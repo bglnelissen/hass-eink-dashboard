@@ -32,6 +32,7 @@ from custom_components.eink_dashboard.render import (
     _parse_days_until,
     _parse_event_start,
     _split_runs,
+    hourly_usage,
     render_dashboard,
 )
 from tests.helpers import (
@@ -2259,6 +2260,122 @@ class TestChartAxisOverrides:
         )
         zonder = render_dashboard([self._widget()], self._config())
         assert alleen_max != zonder
+
+
+class TestHourlyUsage:
+    """Usage per hour since local midnight, from the raw states of an
+    ever-increasing meter (water, gas, electricity).
+    """
+
+    DAY = 1_791_756_000.0  # a local midnight
+
+    def test_usage_lands_in_the_hour_it_happened(self) -> None:
+        points = [
+            {"t": self.DAY - 60, "v": 100.000},
+            {"t": self.DAY + 2 * 3600 + 60, "v": 100.010},
+            {"t": self.DAY + 2 * 3600 + 600, "v": 100.015},
+            {"t": self.DAY + 5 * 3600 + 10, "v": 100.020},
+        ]
+        usage = hourly_usage(
+            points, self.DAY, self.DAY + 5 * 3600 + 100, factor=1000
+        )
+        assert usage[2] == pytest.approx(15)
+        assert usage[5] == pytest.approx(5)
+        assert usage[0] == 0
+        assert usage[3] == 0
+
+    def test_hours_still_to_come_are_none(self) -> None:
+        usage = hourly_usage(
+            [{"t": self.DAY - 60, "v": 1.0}], self.DAY, self.DAY + 5 * 3600
+        )
+        assert len(usage) == 24
+        assert usage[5] == 0
+        assert all(u is None for u in usage[6:])
+
+    def test_a_drop_is_not_counted_as_negative_usage(self) -> None:
+        """A meter that restarts can fall back a little; like the
+        utility_meter helper we skip the drop and count on from there.
+        """
+        points = [
+            {"t": self.DAY - 60, "v": 100.000},
+            {"t": self.DAY + 3600 + 10, "v": 100.010},
+            {"t": self.DAY + 3600 + 20, "v": 99.000},
+            {"t": self.DAY + 2 * 3600 + 10, "v": 99.002},
+        ]
+        usage = hourly_usage(
+            points, self.DAY, self.DAY + 2 * 3600 + 100, factor=1000
+        )
+        assert usage[1] == pytest.approx(10)
+        assert usage[2] == pytest.approx(2)
+
+
+class TestHourlyUsageChart:
+    """chart_type "hourly_usage" draws one bar per hour of today."""
+
+    DAY = TestHourlyUsage.DAY
+
+    def _render(self, hour: int) -> Image.Image:
+        points = [
+            {"t": self.DAY - 60, "v": 100.000},
+            {"t": self.DAY + hour * 3600 + 60, "v": 100.050},
+        ]
+        widget = {
+            "type": "chart",
+            "chart_type": "hourly_usage",
+            "x": 0,
+            "y": 0,
+            "w": 400,
+            "h": 240,
+            "entities": ["sensor.water"],
+            "value_factor": 1000,
+        }
+        config = {
+            "width": 400,
+            "height": 240,
+            "histories": {"sensor.water": points},
+            "day_start": self.DAY,
+            "now": self.DAY + 23 * 3600,
+        }
+        png = render_dashboard([widget], config)
+        return Image.open(io.BytesIO(png)).convert("L")
+
+    @staticmethod
+    def _dark_mean_x(img: Image.Image) -> float:
+        """Mean x of the black pixels in the middle band of the plot,
+        away from the title, the axis labels and the axis itself.
+        """
+        xs = [
+            x
+            for y in range(60, 180)
+            for x in range(60, img.width - 10)
+            if img.getpixel((x, y)) < 60
+        ]
+        assert xs, "the chart drew no bar"
+        return sum(xs) / len(xs)
+
+    def test_early_usage_is_drawn_left_of_late_usage(self) -> None:
+        assert self._dark_mean_x(self._render(2)) < self._dark_mean_x(
+            self._render(20)
+        )
+
+    def test_renders_without_data(self) -> None:
+        widget = {
+            "type": "chart",
+            "chart_type": "hourly_usage",
+            "x": 0,
+            "y": 0,
+            "w": 400,
+            "h": 240,
+            "entities": ["sensor.water"],
+        }
+        config = {
+            "width": 400,
+            "height": 240,
+            "histories": {},
+            "day_start": self.DAY,
+            "now": self.DAY + 3600,
+        }
+        assert render_dashboard([widget], config)
 
 
 class TestCalendarHelpers:

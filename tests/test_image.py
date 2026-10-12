@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import io
+import sys
 from datetime import timedelta
+from types import ModuleType
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -522,6 +524,65 @@ class TestEinkDashboardImage:
             assert config["grayscale_levels"] == 4
             assert config["sharpness"] == 2.0
             assert config["contrast"] == 1.5
+
+    async def test_hourly_usage_chart_fetches_from_local_midnight(
+        self,
+    ) -> None:
+        """An hourly_usage chart needs today's states from 00:00, not a
+        rolling window, and the renderer gets that midnight too.
+        """
+        from datetime import UTC, datetime
+
+        from custom_components.eink_dashboard.render import render_dashboard
+
+        hass = _make_hass()
+        entity = EinkDashboardImage(hass, _make_entry())
+        entity.async_write_ha_state = MagicMock()
+        entity._widgets = [
+            {
+                "type": "chart",
+                "chart_type": "hourly_usage",
+                "entities": ["sensor.water"],
+            }
+        ]
+        midnight = datetime(2026, 10, 12, 22, 0, tzinfo=UTC)
+        now = midnight + timedelta(hours=15)
+        recorder = MagicMock()
+        recorder.async_add_executor_job = AsyncMock(
+            side_effect=lambda fn, *a: fn(*a)
+        )
+        recorder_mod = ModuleType("homeassistant.components.recorder")
+        recorder_mod.get_instance = MagicMock(return_value=recorder)  # type: ignore[attr-defined]
+        history_mod = ModuleType("homeassistant.components.recorder.history")
+        mock_states = MagicMock(return_value={})
+        history_mod.get_significant_states = mock_states  # type: ignore[attr-defined]
+        with (
+            patch.dict(
+                sys.modules,
+                {
+                    "homeassistant.components.recorder": recorder_mod,
+                    "homeassistant.components.recorder.history": history_mod,
+                },
+            ),
+            patch(
+                "custom_components.eink_dashboard.image.dt_util.utcnow",
+                return_value=now,
+                create=True,
+            ),
+            patch(
+                "custom_components.eink_dashboard.image.dt_util.start_of_local_day",
+                return_value=midnight,
+                create=True,
+            ),
+            patch(
+                "custom_components.eink_dashboard.image.render_dashboard",
+                wraps=render_dashboard,
+            ) as mock_render,
+        ):
+            await entity._async_refresh(None)
+
+        assert mock_states.call_args[0][1] == midnight
+        assert mock_render.call_args[0][1]["day_start"] == midnight.timestamp()
 
 
 class TestImagePlatformSetup:

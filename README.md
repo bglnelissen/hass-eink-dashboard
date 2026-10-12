@@ -159,6 +159,7 @@ The component ships a WYSIWYG Lovelace card for editing the dashboard layout.
 | Battery Bar | Horizontal battery level bar with percentage |
 | Status Icons | Row of filled/outline squares for binary sensors |
 | Waste Schedule | Upcoming waste collection dates (today, tomorrow, in N days) |
+| Chart | Line chart of sensor history, or bars with the usage per hour of today |
 | Chess Board | A position from a FEN template, e.g. the Lichess puzzle of the day |
 | QR Code | A QR code from a template, e.g. a link to that puzzle |
 
@@ -175,6 +176,14 @@ shows the widget, so a mistake is visible rather than silent.
 The chess board takes `fen` and `last_move` (UCI, such as `e2e4`) as
 templates, plus `size`, `orientation` (`auto` puts the side to move at the
 bottom), `coordinates` and `dark_color`.
+
+The chart draws sensor history as lines over `graph_span` (such as `24h`).
+With `chart_type: hourly_usage` it draws one bar per hour of today instead,
+from local midnight: how much an ever-increasing meter (water, gas,
+electricity) went up in that hour, not a running total. A meter that falls
+back after a restart is skipped, like the utility_meter helper does.
+`value_factor` multiplies the values, for example `1000` to show a meter in
+m³ as litres. The title is a template, so it can carry today's total.
 
 The QR code takes `data` as a template, plus `module` (pixels per module),
 `border` (white modules around it) and `error` (`l`, `m`, `q` or `h`). It

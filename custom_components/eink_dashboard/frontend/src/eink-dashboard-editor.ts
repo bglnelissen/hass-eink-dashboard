@@ -356,7 +356,15 @@ export const SCHEMAS: Record<string, (d: DisplayConfig) => HaFormSchema[]> = {
       ],
     },
     { name: "entities", selector: { entity: { multiple: true } } },
+    { name: "chart_type", default: "line", selector: { select: {
+      options: [
+        { value: "line", label: "Line (history)" },
+        { value: "hourly_usage", label: "Bars: usage per hour today" },
+      ],
+      mode: "dropdown",
+    }}},
     { name: "graph_span", selector: { text: {} } },
+    { name: "value_factor", selector: { number: { mode: "box", step: "any" } } },
     { type: "grid", name: "", schema: [
       { name: "title", selector: { text: {} } },
       { name: "title_font_size", default: 18, selector: { number: { min: 8, max: 72, mode: "box" } } },
@@ -395,6 +403,8 @@ export const LABELS: Record<string, string> = {
   width: "Line width",
   forecast_days: "Forecast days",
   graph_span: "Graph span (e.g. 6h, 24h, 7d)",
+  chart_type: "Chart type",
+  value_factor: "Multiply values by (e.g. 1000 for m³ to litres)",
   h: "Height",
   ylabel: "Y-axis label",
   xlabel: "X-axis label",
@@ -466,6 +476,10 @@ export function getSummary(widget: Widget): string {
     return `${title}${count} entit${count === 1 ? "y" : "ies"}`;
   }
   if (t === "chart") {
+    if ((widget as unknown as Record<string, unknown>).chart_type === "hourly_usage") {
+      const n = (widget.entities ?? []).length;
+      return `Usage per hour today — ${n} sensor${n !== 1 ? "s" : ""}`;
+    }
     const span = (widget as unknown as Record<string, unknown>).graph_span
       ?? (widget.config as Record<string, unknown>)?.graph_span
       ?? "24h";

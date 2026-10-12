@@ -252,6 +252,8 @@ class EinkDashboardImage(ImageEntity):
                     ),
                     "states": states,
                     "histories": histories,
+                    "day_start": dt_util.start_of_local_day().timestamp(),
+                    "now": dt_util.utcnow().timestamp(),
                     "calendar_events": calendar_events,
                 }
                 battery_sensor = self.hass.data[DOMAIN][
@@ -441,6 +443,7 @@ class EinkDashboardImage(ImageEntity):
     async def _async_fetch_histories(self) -> dict[str, list[dict]]:
         """Fetch recorder history for all chart widget entities."""
         entity_spans: dict[str, timedelta] = {}
+        now = dt_util.utcnow()
         for widget in self._widgets:
             if widget.get("type") != WidgetType.CHART:
                 continue
@@ -451,6 +454,9 @@ class EinkDashboardImage(ImageEntity):
                 or "24h"
             )
             span = _parse_graph_span(raw_span)
+            if widget.get("chart_type") == "hourly_usage":
+                # Usage per hour of today: everything since local midnight.
+                span = now - dt_util.start_of_local_day()
             series = chart_config.get("series", [])
             series_entities = [
                 s.get("entity") for s in series if s.get("entity")
@@ -471,7 +477,6 @@ class EinkDashboardImage(ImageEntity):
             return {}
 
         histories: dict[str, list[dict]] = {}
-        now = dt_util.utcnow()
 
         try:
             from homeassistant.components.recorder import get_instance
