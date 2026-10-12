@@ -26,6 +26,25 @@ devices. No Chromium, no ImageMagick, no Node.js.
 - **Webhook rate limiting** - push targets are throttled to one push per 5
   minutes with a 5 MB size cap
 
+## Screenshots
+
+Two 400 x 480 columns of a TRMNL OG that take turns every refresh: weather
+and a cat fact, then water use per hour of today and a Lichess puzzle with a
+QR code to its solution. Each panel is its own dashboard, combined on a BYOS
+server.
+
+<img src="docs/trmnl-two-screens.png" alt="Two TRMNL panels: weather with a cat fact, and water use per hour with a chess puzzle" width="800">
+
+The chart widget with `chart_type: hourly_usage`: one bar per hour since
+midnight with the litres used in that hour, and today's total in the title
+template.
+
+<img src="docs/hourly-usage-chart.png" alt="Bar chart of water use per hour today" width="400">
+
+The chart widget as lines, in the Lovelace card:
+
+<img src="docs/chart-widget-example.png" alt="Line charts of temperatures and solar yield" width="512">
+
 ## Installation
 
 ### HACS (recommended)
